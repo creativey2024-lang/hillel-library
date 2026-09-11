@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ספריית בית ספר הלל</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' };
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="pb-12 min-h-screen flex flex-col justify-between bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100">
+
+    <!-- Step 1 login: username + shared staff password (verified on the backend) -->
+    <div id="loginScreen" class="fixed inset-0 bg-slate-100 dark:bg-slate-950 z-[200] flex flex-col items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-lg max-w-sm w-full text-center relative border border-transparent dark:border-slate-700">
+            <div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fa-solid fa-lock text-2xl"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">כניסה למערכת</h2>
+            <p class="text-slate-500 dark:text-slate-400 mb-6 text-sm">נא להזין שם משתמש וסיסמה כדי לגשת לספרייה</p>
+
+            <form id="loginForm" class="space-y-4 text-right">
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">שם משתמש</label>
+                    <input type="text" id="usernameInput" placeholder="הקלד שם משתמש..." class="w-full p-3 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-center font-medium" required>
+                    <p class="text-[11px] text-slate-400 dark:text-slate-400 mt-1.5 leading-relaxed text-center">
+                        <i class="fa-solid fa-circle-info text-blue-500 ml-0.5"></i>
+                        יש לכתוב בשם המשתמש את השם שלך <strong>בעברית בלבד</strong>.
+                    </p>
+                </div>
+
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">סיסמה</label>
+                    <input type="password" id="passwordInput" placeholder="הקלד סיסמה..." class="w-full p-3 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-center" required>
+                </div>
+
+                <p id="loginError" class="text-red-500 text-xs hidden font-medium text-center bg-red-50 dark:bg-red-950/30 py-2 rounded-lg border border-red-100 dark:border-red-900/50"></p>
+
+                <button type="submit" id="loginSubmitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium p-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    היכנס למערכת
+                </button>
+            </form>
+
+            <div class="mt-6 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-lg text-right">
+                <p class="text-xs text-amber-800 dark:text-amber-300 leading-relaxed font-medium">
+                    <i class="fa-solid fa-circle-question text-amber-600 dark:text-amber-400 ml-1"></i>
+                    אם אינכם מופיעים במערכת או שנתקלתם בבעיה, נא לגשת לכיתה <strong>ז1</strong> למארק או להלל להסדרה!
+                </p>
+            </div>
+        </div>
+
+        <div class="absolute bottom-4 left-4 text-xs text-slate-400 dark:text-slate-500 font-medium">
+            <i class="fa-solid fa-code ml-1 text-slate-300 dark:text-slate-700"></i>
+            נוצר על ידי מארק והלל
+        </div>
+    </div>
+
+    <!-- Step 2 login: super-admin (מארק) second password, verified separately on the backend -->
+    <div id="markPasswordScreen" class="fixed inset-0 bg-slate-200 dark:bg-slate-950 z-[210] flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-lg max-w-sm w-full text-center border-2 border-amber-400">
+            <div class="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fa-solid fa-user-shield text-2xl"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">אימות מנהל על (מארק)</h2>
+            <p class="text-slate-500 dark:text-slate-400 mb-6 text-sm">אנא הזן את סיסמת האבטחה השנייה שלך כדי להמשיך</p>
+
+            <form id="markPasswordForm" class="space-y-4 text-right">
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">סיסמת מנהל על סודית</label>
+                    <input type="password" id="markPasswordInput" placeholder="הקלד סיסמת מארק..." class="w-full p-3 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-center font-bold tracking-wider" required>
+                </div>
+
+                <p id="markPasswordError" class="text-red-500 text-xs hidden font-medium text-center bg-red-50 dark:bg-red-950/20 py-2 rounded-lg border border-red-100 dark:border-red-900/50">
+                    סיסמת מנהל על שגויה!
+                </p>
+
+                <div class="flex gap-2">
+                    <button type="submit" id="markVerifySubmitBtn" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-semibold p-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-shield-check"></i>
+                        אמת כניסה
+                    </button>
+                    <button type="button" id="cancelMarkVerificationBtn" class="bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-medium p-3 rounded-lg transition-colors">
+                        חזור
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin panel: staff management -->
+    <div id="adminModal" class="fixed inset-0 bg-slate-900 bg-opacity-50 flex items-center justify-center z-50 p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6 text-right flex flex-col max-h-[90vh] border border-transparent dark:border-slate-700">
+            <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-3 mb-4">
+                <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-user-shield text-blue-600 dark:text-blue-400"></i>
+                    ניהול צוות ומשתמשים (אדמין)
+                </h3>
+                <button id="closeAdminModalBtn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="overflow-y-auto flex-1 space-y-6 pl-1">
+                <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg border border-slate-200 dark:border-slate-600">
+                    <h4 class="font-semibold text-sm text-slate-700 dark:text-slate-200 mb-2">הוספת איש צוות חדש</h4>
+                    <form id="addUserForm" class="flex flex-col sm:flex-row gap-2">
+                        <input type="text" id="newUsernameInput" placeholder="שם בעברית בלבד..." class="flex-1 p-2 border border-slate-300 dark:border-slate-500 dark:bg-slate-600 dark:text-white rounded-lg outline-none text-sm" required>
+                        <select id="newUserRoleInput" class="p-2 border border-slate-300 dark:border-slate-500 dark:bg-slate-600 dark:text-white rounded-lg outline-none text-sm bg-white" required>
+                            <option value="librarian">ספרן רגיל</option>
+                            <option value="admin" id="roleOptionAdmin">מנהל (אדמין)</option>
+                        </select>
+                        <button type="submit" id="addUserSubmitBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                            הוסף / עדכן
+                        </button>
+                    </form>
+                    <p class="text-[10px] text-slate-400 dark:text-slate-300 mt-1">
+                        אם המשתמש כבר קיים, בחירת תפקיד ושמירה תעדכן אותו מיד. משתמש חדש מקבל סיסמת ברירת מחדל
+                        שאפשר לשנות מיד באמצעות כפתור המפתח <i class="fa-solid fa-key"></i> ליד שמו.
+                    </p>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-sm text-slate-700 dark:text-slate-200 mb-3">רשימת בעלי גישה למערכת</h4>
+                    <div class="border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-100 dark:divide-slate-700">
+                        <ul id="usersListContainer" class="divide-y divide-slate-100 dark:divide-slate-700"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="userDeleteModal" class="fixed inset-0 bg-slate-900 bg-opacity-60 flex items-center justify-center z-[250] p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-sm w-full p-6 text-center border border-transparent dark:border-slate-700">
+            <div class="w-16 h-16 bg-red-100 dark:bg-red-950/20 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-400">
+                <i class="fa-solid fa-user-minus text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-bold mb-2 dark:text-white">הסרת משתמש</h3>
+            <p id="userDeleteModalMessage" class="text-slate-500 dark:text-slate-400 text-sm mb-6">האם אתה בטוח שברצונך להסיר את המשתמש?</p>
+            <div class="flex gap-3 justify-center">
+                <button id="confirmUserDeleteBtn" class="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors text-sm">
+                    כן, הסר גישה
+                </button>
+                <button id="closeUserDeleteModalBtn" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 px-5 py-2.5 rounded-lg font-medium transition-colors text-sm">
+                    ביטול
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset-password modal (self, or super-admin resetting anyone) -->
+    <div id="resetPasswordModal" class="fixed inset-0 bg-slate-900 bg-opacity-60 flex items-center justify-center z-[250] p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-sm w-full p-6 text-center border border-transparent dark:border-slate-700">
+            <div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600 dark:text-blue-400">
+                <i class="fa-solid fa-key text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-bold mb-2 dark:text-white">עדכון סיסמה</h3>
+            <p id="resetPasswordModalMessage" class="text-slate-500 dark:text-slate-400 text-sm mb-4">בחר/י סיסמה חדשה.</p>
+            <input type="password" id="resetPasswordInput" placeholder="סיסמה חדשה (3 תווים לפחות)" class="w-full p-3 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-center mb-4">
+            <div class="flex gap-3 justify-center">
+                <button id="confirmResetPasswordBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors text-sm">
+                    שמור סיסמה
+                </button>
+                <button id="closeResetPasswordModalBtn" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 px-5 py-2.5 rounded-lg font-medium transition-colors text-sm">
+                    ביטול
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add / edit a note on a single borrow record ("add a note to every book") -->
+    <div id="noteModal" class="fixed inset-0 bg-slate-900 bg-opacity-60 flex items-center justify-center z-[250] p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-sm w-full p-6 text-right border border-transparent dark:border-slate-700">
+            <div class="flex items-center gap-2 mb-3">
+                <div class="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                    <i class="fa-solid fa-note-sticky"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold dark:text-white">הערה על הספר</h3>
+                    <p id="noteModalSubtitle" class="text-xs text-slate-500 dark:text-slate-400"></p>
+                </div>
+            </div>
+            <textarea id="noteModalTextarea" rows="4" maxlength="500" placeholder="לדוגמה: הספר חזר עם דף קרוע / התלמיד/ה ביקש/ה הארכה..." class="w-full p-3 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm resize-none"></textarea>
+            <p class="text-[10px] text-slate-400 mt-1 mb-4">עד 500 תווים.</p>
+            <div class="flex gap-3 justify-end">
+                <button id="closeNoteModalBtn" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 px-5 py-2.5 rounded-lg font-medium transition-colors text-sm">
+                    ביטול
+                </button>
+                <button id="saveNoteBtn" class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-lg font-medium transition-colors text-sm">
+                    שמור הערה
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingScreen" class="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-[100] flex items-center justify-center flex-col gap-4">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <p id="loadingText" class="text-slate-600 dark:text-slate-400 font-medium text-sm">טוען את המערכת...</p>
+    </div>
+
+    <div id="toastNotification" class="fixed top-6 left-1/2 transform -translate-x-1/2 px-5 py-3 rounded-2xl shadow-xl text-white text-sm font-semibold z-50 transition-all duration-300 bg-green-600/90 opacity-0 pointer-events-none translate-y-[-20px]">
+        <span id="toastMessage"></span>
+    </div>
+
+    <div id="deleteModal" class="fixed inset-0 bg-slate-900 bg-opacity-50 flex items-center justify-center z-50 p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-sm w-full p-6 text-center border border-transparent dark:border-slate-700">
+            <div class="w-16 h-16 bg-red-100 dark:bg-red-950/20 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-400">
+                <i class="fa-solid fa-trash-can text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-bold mb-2 dark:text-white">האם למחוק רשומה זו?</h3>
+            <p class="text-slate-500 dark:text-slate-400 text-sm mb-6">הפעולה תמחק את הרשומה לצמיתות ולא ניתן יהיה לשחזר אותה.</p>
+            <div class="flex gap-3 justify-center">
+                <button id="confirmDeleteBtn" class="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors text-sm">
+                    כן, מחק
+                </button>
+                <button id="closeDeleteModalBtn" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 px-5 py-2.5 rounded-lg font-medium transition-colors text-sm">
+                    ביטול
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="localModeBanner" class="bg-amber-500 text-white text-xs font-semibold py-2 px-4 text-center hidden">
+        <i class="fa-solid fa-triangle-exclamation ml-1.5"></i>
+        המערכת פועלת כרגע במצב מקומי (אחסון על גבי השרת בלבד).
+        <span class="font-bold text-slate-100">סנכרון לענן (Firestore) אינו זמין כרגע - בדוק/י את הגדרות ה-.env בשרת.</span>
+    </div>
+
+    <div class="flex-grow">
+        <header class="bg-blue-700 dark:bg-slate-800 text-white shadow-md">
+            <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="bg-white dark:bg-slate-700 p-2 rounded-full text-blue-700 dark:text-blue-400 flex items-center justify-center w-10 h-10 shadow-sm">
+                        <i class="fa-solid fa-book-open text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold tracking-tight">ספריית בית ספר הלל</h1>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button id="adminPanelBtn" class="items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg transition-colors border border-amber-400 font-semibold shadow-sm text-sm hidden">
+                        <i class="fa-solid fa-user-shield"></i>
+                        <span>ניהול צוות (אדמין)</span>
+                    </button>
+
+                    <div class="relative" id="userMenuContainer">
+                        <button id="userMenuToggle" class="flex items-center gap-2 bg-blue-600 dark:bg-slate-700 hover:bg-blue-800 dark:hover:bg-slate-600 px-3 py-1.5 rounded-full transition-colors border border-blue-400 dark:border-slate-500 focus:outline-none shadow-sm">
+                            <span id="userAvatarLetter" class="w-8 h-8 rounded-full bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 font-bold flex items-center justify-center text-sm shadow-inner"></span>
+                            <span id="loggedInUserName" class="hidden sm:inline text-sm font-semibold text-white ml-1"></span>
+                            <i class="fa-solid fa-chevron-down text-white text-xs opacity-80"></i>
+                        </button>
+                        <div id="userDropdown" class="absolute left-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-xl py-1 z-30 border border-slate-200 dark:border-slate-700 hidden">
+                            <button id="setThemeLightBtn" class="w-full text-right px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 font-semibold transition-colors">
+                                <i class="fa-solid fa-sun text-sm text-amber-500"></i>
+                                <span>עיצוב בהיר</span>
+                            </button>
+                            <button id="setThemeDarkBtn" class="w-full text-right px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 font-semibold transition-colors">
+                                <i class="fa-solid fa-moon text-sm text-indigo-500"></i>
+                                <span>עיצוב כהה</span>
+                            </button>
+                            <hr class="border-slate-200 dark:border-slate-700 my-1">
+                            <button id="myPasswordBtn" class="w-full text-right px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 font-semibold transition-colors">
+                                <i class="fa-solid fa-key text-sm text-blue-500"></i>
+                                <span>שינוי סיסמה</span>
+                            </button>
+                            <button id="logoutBtn" class="w-full text-right px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 font-semibold transition-colors">
+                                <i class="fa-solid fa-right-from-bracket text-sm"></i>
+                                <span>התנתק מהמערכת</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                <h2 class="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                    <i class="fa-solid fa-bookmark text-blue-600 dark:text-blue-400"></i>
+                    רישום השאלה חדשה
+                </h2>
+                <form id="addRecordForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+                    <div class="space-y-1 lg:col-span-1">
+                        <label class="text-sm font-medium text-slate-600 dark:text-slate-300">שם התלמיד/ה</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-user-plus absolute right-3 top-3.5 text-slate-400 dark:text-slate-500 text-sm"></i>
+                            <input type="text" id="studentName" placeholder="לדוגמה: רועי כהן" class="w-full pr-9 p-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" required>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1 lg:col-span-1">
+                        <label class="text-sm font-medium text-slate-600 dark:text-slate-300">כיתה</label>
+                        <select id="studentClass" class="w-full p-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white" required>
+                            <option value="" disabled selected>בחר כיתה...</option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-1 lg:col-span-1">
+                        <label class="text-sm font-medium text-slate-600 dark:text-slate-300">שם הספר</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-book absolute right-3 top-3.5 text-slate-400 dark:text-slate-500 text-sm"></i>
+                            <input type="text" id="bookName" placeholder="לדוגמה: הארי פוטר" class="w-full pr-9 p-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" required>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1 lg:col-span-1">
+                        <label class="text-sm font-medium text-slate-600 dark:text-slate-300">תאריך השאלה</label>
+                        <input type="date" id="borrowDate" class="w-full p-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" required>
+                    </div>
+
+                    <div class="space-y-1 lg:col-span-1">
+                        <label class="text-sm font-medium text-slate-600 dark:text-slate-300">תאריך החזרה מיועד</label>
+                        <input type="date" id="returnDate" class="w-full p-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" required>
+                    </div>
+
+                    <button type="submit" id="addRecordSubmitBtn" class="w-full lg:col-span-1 bg-green-600 hover:bg-green-700 text-white font-medium p-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span id="submitBtnText">שמור</span>
+                    </button>
+                </form>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                    <h3 class="text-sm font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                        <i class="fa-regular fa-folder-open"></i>
+                        סינון וחיפוש:
+                    </h3>
+
+                    <div class="relative w-full sm:w-72">
+                        <i class="fa-solid fa-magnifying-glass absolute right-3 top-2.5 text-slate-400 dark:text-slate-500 text-sm"></i>
+                        <input type="text" id="searchInput" placeholder="חפש ספר, תלמיד או כיתה..." class="w-full pr-9 p-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition-shadow shadow-sm">
+                    </div>
+                </div>
+
+                <div id="filterContainer" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+                    <h2 id="tableTitle" class="text-lg font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-200"><i class="fa-regular fa-calendar text-blue-500"></i> רשימת השאלות</h2>
+                    <div id="totalRecordsBadge" class="text-sm text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-3 py-1 rounded-full font-medium"></div>
+                </div>
+
+                <div class="overflow-x-auto table-container">
+                    <table class="w-full text-right text-sm whitespace-nowrap bg-white dark:bg-slate-800">
+                        <thead class="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                                <th class="px-6 py-4 font-semibold">תלמיד/ה</th>
+                                <th class="px-6 py-4 font-semibold">כיתה</th>
+                                <th class="px-6 py-4 font-semibold">ספר</th>
+                                <th class="px-6 py-4 font-semibold">השאלה</th>
+                                <th class="px-6 py-4 font-semibold">החזרה מיועדת</th>
+                                <th class="px-6 py-4 font-semibold">סטטוס</th>
+                                <th class="px-6 py-4 font-semibold">הערה</th>
+                                <th class="px-6 py-4 font-semibold text-center">פעולות</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recordsTableBody" class="divide-y divide-slate-100 dark:divide-slate-700 bg-white dark:bg-slate-800"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <footer class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 mt-auto pt-6 text-slate-400 dark:text-slate-500 text-xs text-left">
+        <i class="fa-solid fa-code ml-1 text-slate-300 dark:text-slate-700"></i>
+        נוצר על ידי מארק והלל
+    </footer>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
