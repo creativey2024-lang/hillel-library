@@ -1,0 +1,83 @@
+{
+  "_comment": "This file preserves the exact staff list and borrow records that were captured in the uploaded index_6.html snapshot (the file created by the app's old 'download source code' button, which serialized the live page - so this is real data, not a placeholder). It seeds backend/src/data/local-db.json the first time the server runs, and is used whenever the Firestore cloud database is unreachable. Exact time-of-day for 'createdAt' was not present in the snapshot (only the date was shown), so times were reconstructed to preserve the original display order; the dates themselves are exact.",
+
+  "staff": [
+    { "id": "super-mark", "username": "מארק", "role": "admin", "isSuperAdmin": true, "createdAt": "2026-01-01T00:00:00.000Z" },
+    { "id": "9p0T2DdwyGhmfdvPEJ7j", "username": "לאון", "role": "admin", "isSuperAdmin": false, "createdAt": "2026-01-01T00:00:00.000Z" },
+    { "id": "AbbXkLAMRa9fd6g8LTD7", "username": "הלל", "role": "admin", "isSuperAdmin": false, "createdAt": "2026-01-01T00:00:00.000Z" },
+    { "id": "AbnE2H5T0XxPsXWX7frI", "username": "יאשה", "role": "librarian", "isSuperAdmin": false, "createdAt": "2026-01-01T00:00:00.000Z" }
+  ],
+
+  "records": [
+    {
+      "id": "ZtMXurCjk9Yh0kPkKCUW",
+      "studentName": "אדם אהרון בזן",
+      "studentClass": "ב' פולג",
+      "bookName": "קפטן תחתונים בצבע",
+      "borrowDate": "2026-09-08",
+      "returnDate": "2026-09-30",
+      "status": "borrowed",
+      "isReturned": false,
+      "actualReturnDate": null,
+      "note": "",
+      "createdAt": "2026-09-08T12:00:00.000Z",
+      "addedBy": "מארק"
+    },
+    {
+      "id": "K9E52XLUT03bTUeZFKvA",
+      "studentName": "אלמוג לוי",
+      "studentClass": "ג' תבור",
+      "bookName": "אחיות",
+      "borrowDate": "2026-09-08",
+      "returnDate": "2026-09-30",
+      "status": "borrowed",
+      "isReturned": false,
+      "actualReturnDate": null,
+      "note": "",
+      "createdAt": "2026-09-08T11:00:00.000Z",
+      "addedBy": "מארק"
+    },
+    {
+      "id": "sxq17TzruRuRBJwDierb",
+      "studentName": "רוני ברמן",
+      "studentClass": "ה' גפן",
+      "bookName": "אחיות",
+      "borrowDate": "2026-09-08",
+      "returnDate": "2026-09-30",
+      "status": "borrowed",
+      "isReturned": false,
+      "actualReturnDate": null,
+      "note": "",
+      "createdAt": "2026-09-08T10:00:00.000Z",
+      "addedBy": "מארק"
+    },
+    {
+      "id": "10LX5fPEx3NvW9XYp0BX",
+      "studentName": "אדם אהרוני",
+      "studentClass": "ב' פולג",
+      "bookName": "דוד אריאה 6",
+      "borrowDate": "2026-09-07",
+      "returnDate": "2026-09-30",
+      "status": "borrowed",
+      "isReturned": false,
+      "actualReturnDate": null,
+      "note": "",
+      "createdAt": "2026-09-07T10:00:00.000Z",
+      "addedBy": "מארק"
+    },
+    {
+      "id": "cM1HcGWePJ1ar2x1W4pj",
+      "studentName": "דילן מילונציק",
+      "studentClass": "ג' תבור",
+      "bookName": "יומנו של חנון 15",
+      "borrowDate": "2026-09-06",
+      "returnDate": "2026-09-30",
+      "status": "borrowed",
+      "isReturned": false,
+      "actualReturnDate": null,
+      "note": "",
+      "createdAt": "2026-09-06T10:00:00.000Z",
+      "addedBy": "מארק"
+    }
+  ]
+}
