@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ריצה בעיר</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <div id="world"></div>
+
+    <div id="hud" class="hidden">
+        <div class="hud-box">
+            <span class="hud-label">ניקוד</span>
+            <span id="hudScore" class="hud-value">0</span>
+        </div>
+        <div class="hud-box">
+            <span class="hud-coin"></span>
+            <span id="hudCoins" class="hud-value">0</span>
+        </div>
+        <div class="hud-box hud-best">
+            <span class="hud-label">שיא</span>
+            <span id="hudBest" class="hud-value">0</span>
+        </div>
+    </div>
+
+    <button id="muteBtn" class="icon-btn hidden" type="button" aria-label="השתק / בטל השתקה" title="צליל">
+        <svg id="iconSoundOn" viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05A4.48 4.48 0 0 0 16.5 12zM14 3.23v2.06a7 7 0 0 1 0 13.42v2.06A9 9 0 0 0 14 3.23z"/></svg>
+        <svg id="iconSoundOff" class="hidden" viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zM19 12c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12a9 9 0 0 0-7-8.77v2.06A7 7 0 0 1 19 12zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a9 9 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>
+    </button>
+
+    <div id="loadingScreen" class="overlay">
+        <div class="panel">
+            <div class="spinner"></div>
+            <p id="loadingText">טוען את העיר... 0%</p>
+        </div>
+    </div>
+
+    <div id="startScreen" class="overlay hidden">
+        <div class="panel">
+            <h1>ריצה בעיר</h1>
+            <p class="subtitle">התחמקו מהמשאיות, קפצו מעל הלבנים ואספו מטבעות!</p>
+            <ul class="controls">
+                <li><kbd>←</kbd> <kbd>→</kbd> או החלקה ימינה / שמאלה — החלפת מסלול</li>
+                <li><kbd>↑</kbd> / <kbd>רווח</kbd> או הקשה — קפיצה</li>
+                <li><kbd>P</kbd> — השהיה</li>
+            </ul>
+            <button id="startBtn" class="primary-btn" type="button">התחל לרוץ</button>
+        </div>
+    </div>
+
+    <div id="pauseScreen" class="overlay hidden">
+        <div class="panel">
+            <h2>המשחק מושהה</h2>
+            <button id="resumeBtn" class="primary-btn" type="button">המשך</button>
+        </div>
+    </div>
+
+    <div id="gameOverScreen" class="overlay hidden">
+        <div class="panel">
+            <h2>אוי! נתקלת במכשול</h2>
+            <div class="results">
+                <div><span class="hud-label">ניקוד</span><strong id="finalScore">0</strong></div>
+                <div><span class="hud-label">מטבעות</span><strong id="finalCoins">0</strong></div>
+                <div><span class="hud-label">שיא</span><strong id="finalBest">0</strong></div>
+            </div>
+            <p id="newBestBadge" class="new-best hidden">שיא חדש!</p>
+            <button id="restartBtn" class="primary-btn" type="button">שחק שוב</button>
+            <p class="hint">או לחצו רווח</p>
+        </div>
+    </div>
+
+    <div id="credits">
+        מבוסס על <a href="https://github.com/wanfungchui/boxy-run" target="_blank" rel="noopener">Boxy Run</a> ·
+        גרפיקה וצלילים: <a href="https://kenney.nl" target="_blank" rel="noopener">Kenney</a> ·
+        <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "./lib/three.module.min.js" } }
+    </script>
+    <script type="module" src="./game.js"></script>
+</body>
+</html>
