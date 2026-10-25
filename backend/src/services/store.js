@@ -59,22 +59,38 @@ async function retryCloudIfConfigured() {
   }
 }
 
+const STAFF_CACHE_MS = 5000;
+let staffCache = null;
+// after a change to the staff, read it again next time
+function fresh(promise) {
+  staffCache = null;
+  return promise.finally(() => {
+    staffCache = null;
+  });
+}
+
 const store = {
   configureCloud,
   getStatus,
   retryCloudIfConfigured,
 
-  listStaff: () => withFallback((c) => c.listStaff(), () => localStore.listStaff()),
+  // (kept for a few seconds: every request checks who is still on the staff)
+  listStaff: async () => {
+    if (staffCache && Date.now() - staffCache.at < STAFF_CACHE_MS) return staffCache.list;
+    const list = await withFallback((c) => c.listStaff(), () => localStore.listStaff());
+    staffCache = { at: Date.now(), list };
+    return list;
+  },
 
   findStaffByUsername: async (username) => {
     const staff = await store.listStaff();
     return staff.find((s) => s.username === username) || null;
   },
 
-  addStaff: (data) => withFallback((c) => c.addStaff(data), () => localStore.addStaff(data)),
+  addStaff: (data) => fresh(withFallback((c) => c.addStaff(data), () => localStore.addStaff(data))),
   updateStaffRole: (id, role) =>
-    withFallback((c) => c.updateStaffRole(id, role), () => localStore.updateStaffRole(id, role)),
-  removeStaff: (id) => withFallback((c) => c.removeStaff(id), () => localStore.removeStaff(id)),
+    fresh(withFallback((c) => c.updateStaffRole(id, role), () => localStore.updateStaffRole(id, role))),
+  removeStaff: (id) => fresh(withFallback((c) => c.removeStaff(id), () => localStore.removeStaff(id))),
 
   // Classes come back sorted by their "order" field.
   listClasses: async () => {

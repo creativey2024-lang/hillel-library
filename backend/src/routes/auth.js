@@ -3,6 +3,7 @@ const credentials = require('../services/credentialsStore');
 const store = require('../services/store');
 const tokens = require('../util/tokens');
 const { serializeCookie } = require('../util/cookies');
+const { TAB_SESSION_HEADER } = require('../middleware/auth');
 
 // All authentication now happens here on the backend: the frontend never sees
 // password hashes, the shared password, or the super-admin's second password -
@@ -16,6 +17,8 @@ function createAuthRouter({ jwtSecret, sessionTtlSeconds, pendingTtlSeconds, sup
       serializeCookie('hillel_session', token, { maxAge: sessionTtlSeconds, secure: isProd }),
       serializeCookie('hillel_pending_super', '', { maxAge: 0, secure: isProd }),
     ]);
+    // also handed to the page, so this browser tab keeps its own user
+    return token;
   }
 
   function setPendingCookie(res, username) {
@@ -54,8 +57,8 @@ function createAuthRouter({ jwtSecret, sessionTtlSeconds, pendingTtlSeconds, sup
         return res.json({ requiresSuperVerification: true });
       }
 
-      setSessionCookie(res, { username: staffMember.username, role: staffMember.role, isSuperAdmin: false });
-      return res.json({ username: staffMember.username, role: staffMember.role, isSuperAdmin: false });
+      const sessionToken = setSessionCookie(res, { username: staffMember.username, role: staffMember.role, isSuperAdmin: false });
+      return res.json({ username: staffMember.username, role: staffMember.role, isSuperAdmin: false, sessionToken });
     } catch (err) {
       console.error('[auth] Login error:', err);
       res.status(500).json({ error: 'שגיאה זמנית בכניסה, אנא נסה שנית' });
@@ -77,8 +80,8 @@ function createAuthRouter({ jwtSecret, sessionTtlSeconds, pendingTtlSeconds, sup
         return res.status(401).json({ error: 'סיסמת מנהל על שגויה!' });
       }
 
-      setSessionCookie(res, { username: superAdminUsername, role: 'admin', isSuperAdmin: true });
-      return res.json({ username: superAdminUsername, role: 'admin', isSuperAdmin: true });
+      const sessionToken = setSessionCookie(res, { username: superAdminUsername, role: 'admin', isSuperAdmin: true });
+      return res.json({ username: superAdminUsername, role: 'admin', isSuperAdmin: true, sessionToken });
     } catch (err) {
       console.error('[auth] Super verification error:', err);
       res.status(500).json({ error: 'שגיאה זמנית, אנא נסה שנית' });
@@ -92,6 +95,10 @@ function createAuthRouter({ jwtSecret, sessionTtlSeconds, pendingTtlSeconds, sup
 
   router.get('/me', (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'לא מחובר' });
+    // A tab that came in with the shared cookie keeps that login as its own
+    // from now on (so a login in another tab won't switch this one).
+    const fromTab = req.headers[TAB_SESSION_HEADER];
+    if (!fromTab && req.cookies['hillel_session']) return res.json({ ...req.user, sessionToken: req.cookies['hillel_session'] });
     res.json(req.user);
   });
 

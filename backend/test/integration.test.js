@@ -35,7 +35,7 @@ store.configureCloud({}); // no cloud config -> local-only mode
 credentials.configureCloud({}); // no cloud config -> local-only mode
 
 const app = createApp();
-app.use(attachUser(JWT_SECRET));
+app.use(attachUser(JWT_SECRET, { lookupStaff: (username) => store.findStaffByUsername(username) }));
 app.use('/api/auth', createAuthRouter({
   jwtSecret: JWT_SECRET,
   sessionTtlSeconds: 3600,
@@ -394,4 +394,22 @@ test('classes: the last remaining class cannot be removed', async () => {
   const names = (await admin.get('/api/meta/classes')).data;
   assert.equal(names.length, 26);
   assert.ok(names.includes("ז'1"));
+});
+
+test('someone removed from the staff loses access at once, and a role change counts at once', async () => {
+  const superClient = makeClient();
+  await superClient.post('/api/auth/login', { username: 'מארק', password: 'chop' });
+  await superClient.post('/api/auth/verify-super', { password: 'Mark2013' });
+  const created = await superClient.post('/api/staff', { username: 'זמני', role: 'admin' });
+  assert.equal(created.status, 201);
+
+  const temp = makeClient();
+  assert.equal((await temp.post('/api/auth/login', { username: 'זמני', password: 'chop' })).status, 200);
+  assert.equal((await temp.get('/api/staff')).status, 200);
+  // made a plain librarian: admin routes close right away (same login)
+  await superClient.patch(`/api/staff/${created.data.staff.id}/role`, { role: 'librarian' });
+  assert.equal((await temp.post('/api/staff', { username: 'עוד', role: 'librarian' })).status, 403);
+  // removed: the old login stops working
+  await superClient.del(`/api/staff/${created.data.staff.id}`);
+  assert.equal((await temp.get('/api/records')).status, 401);
 });

@@ -28,7 +28,14 @@ function beamMat(color) {
     return beamMats[color];
 }
 
+// built once per ammo type; every box on the ground shares it
+const ammoCache = new Map();
 function ammoMesh(type) {
+    if (!ammoCache.has(type)) ammoCache.set(type, buildAmmoMesh(type));
+    return ammoCache.get(type).clone(true);
+}
+
+function buildAmmoMesh(type) {
     const g = new THREE.Group();
     const color = new THREE.Color(AMMO[type].color);
     const box = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.26, 0.32), new THREE.MeshStandardMaterial({ color: 0x5b6b4e, roughness: 0.6, metalness: 0.2 }));

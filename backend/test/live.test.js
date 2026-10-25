@@ -70,11 +70,25 @@ function connect(username, where = 'arena') {
 
 test('rejects connections without a valid session', async () => {
   const ws = new WebSocket(`ws://127.0.0.1:${port}/api/live`);
-  const result = await new Promise((resolve) => {
-    ws.addEventListener('open', () => resolve('open'));
-    ws.addEventListener('error', () => resolve('error'));
-  });
-  assert.equal(result, 'error');
+  const closed = new Promise((resolve) => ws.addEventListener('close', (e) => resolve(e.code)));
+  await new Promise((resolve) => ws.addEventListener('open', resolve));
+  ws.send(JSON.stringify({ type: 'auth', token: 'not-a-real-token-at-all' }));
+  assert.equal(await closed, 4001);
+});
+
+test('a browser tab can use its own session (not the shared cookie)', async () => {
+  // the cookie says one user, the tab's own token says another - the tab wins
+  const cookie = `hillel_session=${encodeURIComponent(tokens.sign({ username: 'עוגייה', role: 'librarian' }, SECRET, 3600))}`;
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/api/live`, { headers: { cookie } });
+  const got = new Promise((resolve) => ws.addEventListener('message', (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'welcome') resolve(m.username);
+  }));
+  await new Promise((resolve) => ws.addEventListener('open', resolve));
+  ws.send(JSON.stringify({ type: 'auth', token: tokens.sign({ username: 'מארק', role: 'admin' }, SECRET, 3600) }));
+  ws.send(JSON.stringify({ type: 'hello', where: 'site' }));
+  assert.equal(await got, 'מארק');
+  ws.close();
 });
 
 test('invite by name, accept, ready together -> both get the same start', async () => {
@@ -141,4 +155,14 @@ test('a party holds at most 4 players', async () => {
   const full = await leader.waitFor((m) => m.type === 'inviteResult');
   assert.equal(full.ok, false);
   cs.forEach((c) => c.close());
+});
+
+test('the same user opening the game twice: only the newest one plays', async () => {
+  const first = await connect('כפול');
+  await first.waitFor((m) => m.type === 'party');
+  const second = await connect('כפול');
+  await second.waitFor((m) => m.type === 'party');
+  const replaced = await first.waitFor((m) => m.type === 'replaced');
+  assert.ok(replaced);
+  second.close();
 });

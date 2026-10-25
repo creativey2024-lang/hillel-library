@@ -89,8 +89,20 @@ function accent(rarity) {
     return accentCache[rarity];
 }
 
-/** A gun model pointing along +z, held at the origin (the grip). */
+/**
+ * A gun model pointing along +z, held at the origin (the grip).
+ * Each kind/rarity is built once; every copy (on the ground, in a hand, in
+ * the inventory icons) shares its shapes and materials, so picking up and
+ * switching weapons doesn't keep making new 3D data (that used up memory).
+ */
+const weaponCache = new Map();
 export function weaponMesh(kind, rarity) {
+    const key = `${kind}:${rarity}`;
+    if (!weaponCache.has(key)) weaponCache.set(key, buildWeaponMesh(kind, rarity));
+    return weaponCache.get(key).clone(true);
+}
+
+function buildWeaponMesh(kind, rarity) {
     const m = mats();
     const parts = new Map();
     const A = accent(rarity);

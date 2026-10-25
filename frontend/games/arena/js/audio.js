@@ -41,6 +41,8 @@ export function createAudio() {
 
     function play(name, { volume = 1, rate = 1 } = {}) {
         if (!ctx || muted || !buffers[name]) return;
+        // (a sound must never break the game, whatever numbers come in)
+        if (!Number.isFinite(volume) || !Number.isFinite(rate) || volume <= 0) return;
         const src = ctx.createBufferSource();
         src.buffer = buffers[name];
         src.playbackRate.value = rate * (0.95 + Math.random() * 0.1);
@@ -52,6 +54,7 @@ export function createAudio() {
 
     function boom({ volume = 1, low = 400, length = 0.35 } = {}) {
         if (!ctx || muted || !noiseBuffer) return;
+        if (!Number.isFinite(volume) || !Number.isFinite(low) || !Number.isFinite(length) || volume <= 0) return;
         const src = ctx.createBufferSource();
         src.buffer = noiseBuffer;
         const filter = ctx.createBiquadFilter();

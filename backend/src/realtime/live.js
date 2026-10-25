@@ -1,6 +1,7 @@
 const url = require('url');
 const { parseCookies } = require('../util/cookies');
 const { verify } = require('../util/tokens');
+const { sessionTokenFrom } = require('../middleware/auth');
 const { acceptUpgrade, rejectUpgrade } = require('./ws');
 const { createPartyHub } = require('./partyHub');
 
@@ -15,17 +16,40 @@ function attachLiveChannel(server, { jwtSecret, hub = createPartyHub(), pingEver
       rejectUpgrade(socket, 404, 'Not Found');
       return;
     }
-    const token = parseCookies(req.headers.cookie)['hillel_session'];
-    const payload = token ? verify(token, jwtSecret) : null;
-    if (!payload || !payload.username) {
-      rejectUpgrade(socket, 401, 'Unauthorized');
-      return;
-    }
+    const check = (token) => {
+      const payload = token ? verify(token, jwtSecret) : null;
+      return payload && payload.username ? payload.username : null;
+    };
+    const cookieUser = check(sessionTokenFrom(req, parseCookies(req.headers.cookie)));
     const ws = acceptUpgrade(req, socket, head);
     if (!ws) return;
     sockets.add(ws);
     ws.on('close', () => sockets.delete(ws));
-    hub.connect(ws, payload.username);
+    // A browser tab with its own session sends it first ({ type: 'auth', token })
+    // - a WebSocket can't carry headers, and tokens don't belong in addresses.
+    // Without it, the site's cookie decides who this is.
+    const timeout = setTimeout(() => ws.terminate(), 10000);
+    ws.on('close', () => clearTimeout(timeout));
+    const first = (text) => {
+      ws.removeListener('message', first);
+      clearTimeout(timeout);
+      let msg = null;
+      try {
+        msg = JSON.parse(text);
+      } catch (err) {
+        // not JSON
+      }
+      const isAuth = msg && msg.type === 'auth';
+      const username = isAuth ? check(typeof msg.token === 'string' ? msg.token : '') || cookieUser : cookieUser;
+      if (!username) {
+        ws.close(4001, 'Unauthorized');
+        return;
+      }
+      hub.connect(ws, username);
+      // the first message was a normal one: let the hub handle it too
+      if (!isAuth) ws.emit('message', text);
+    };
+    ws.on('message', first);
   });
 
   // keep connections alive through proxies, drop ones that stopped answering

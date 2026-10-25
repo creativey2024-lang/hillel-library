@@ -83,5 +83,14 @@
         { "imports": { "three": "../shared/lib/three.module.min.js" } }
     </script>
     <script type="module" src="./game.js"></script>
+    <script>
+        // If the game's code can't start at all (a file missing on the server, or
+        // old and new files mixed), say so instead of "loading" forever.
+        setTimeout(function () {
+            if (window.__gameBooted) return;
+            var t = document.getElementById('loadingText');
+            if (t) t.textContent = 'המשחק לא נטען - כנראה שחסר קובץ באתר או שנשארה גרסה ישנה. נסו לרענן (Ctrl+F5).';
+        }, 20000);
+    </script>
 </body>
 </html>

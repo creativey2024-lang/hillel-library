@@ -475,7 +475,7 @@
                         <label class="text-sm font-medium text-slate-600 dark:text-slate-300">שם התלמיד/ה</label>
                         <div class="relative">
                             <i class="fa-solid fa-user-plus absolute right-3 top-3.5 text-slate-400 dark:text-slate-500 text-sm"></i>
-                            <input type="text" id="studentName" placeholder="לדוגמה: רועי כהן" class="w-full pr-9 p-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" required>
+                            <input type="text" id="studentName" maxlength="60" placeholder="לדוגמה: רועי כהן" class="w-full pr-9 p-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" required>
                         </div>
                     </div>
 
@@ -490,7 +490,7 @@
                         <label class="text-sm font-medium text-slate-600 dark:text-slate-300">שם הספר</label>
                         <div class="relative">
                             <i class="fa-solid fa-book absolute right-3 top-3.5 text-slate-400 dark:text-slate-500 text-sm"></i>
-                            <input type="text" id="bookName" placeholder="לדוגמה: הארי פוטר" class="w-full pr-9 p-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" required>
+                            <input type="text" id="bookName" maxlength="200" placeholder="לדוגמה: הארי פוטר" class="w-full pr-9 p-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" required>
                         </div>
                     </div>
 
@@ -512,7 +512,7 @@
                         </div>
                     </div>
 
-                    <button type="submit" id="addRecordSubmitBtn" class="w-full lg:col-span-1 bg-green-600 hover:bg-green-700 text-white font-medium p-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm">
+                    <button type="submit" id="addRecordSubmitBtn" class="w-full lg:col-span-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-wait text-white font-medium p-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm">
                         <i class="fa-solid fa-cloud-arrow-up"></i>
                         <span id="submitBtnText">שמור</span>
                     </button>
@@ -552,7 +552,7 @@
                                 <th class="px-6 py-4 font-semibold">החזרה מיועדת</th>
                                 <th class="px-6 py-4 font-semibold">סטטוס</th>
                                 <th class="px-6 py-4 font-semibold">הערה</th>
-                                <th class="px-6 py-4 font-semibold text-center">פעולות</th>
+                                <th class="px-4 py-4 font-semibold text-center col-actions">פעולות</th>
                             </tr>
                         </thead>
                         <tbody id="recordsTableBody" class="divide-y divide-slate-100 dark:divide-slate-700 bg-white dark:bg-slate-800"></tbody>

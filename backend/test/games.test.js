@@ -244,3 +244,23 @@ test('best scores are kept per user (not per computer), and only believed up to 
   const other = await login('יאשה');
   assert.equal((await other.get('/api/games/profile')).data.best.runner, 0);
 });
+
+test('two accounts in two tabs of one browser: each tab stays its own user', async () => {
+  // one browser = one cookie jar: logging in as the second user overwrites the cookie
+  const c = makeClient();
+  const first = await c.post('/api/auth/login', { username: 'הלל', password: 'chop' });
+  const second = await c.post('/api/auth/login', { username: 'יאשה', password: 'chop' });
+  assert.ok(first.data.sessionToken && second.data.sessionToken);
+  // without a tab token the shared cookie decides (the last login)
+  assert.equal((await c.get('/api/auth/me')).data.username, 'יאשה');
+  // the first tab sends its own token and is still the first user
+  const res = await fetch(`${baseUrl}/api/auth/me`, { headers: { 'X-Hillel-Session': first.data.sessionToken } });
+  assert.equal((await res.json()).username, 'הלל');
+  // a tab that opened with the cookie gets it as its own session
+  const me = await c.get('/api/auth/me');
+  assert.equal(me.data.username, 'יאשה');
+  assert.ok(me.data.sessionToken);
+  // a broken tab token is not a way in
+  const bad = await fetch(`${baseUrl}/api/auth/me`, { headers: { 'X-Hillel-Session': 'xxxxxxxxxxxxxxxxxxxx' } });
+  assert.equal(bad.status, 401);
+});

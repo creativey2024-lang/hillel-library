@@ -32,6 +32,8 @@ import { createAudio } from './audio.js';
 import { createLobby } from './lobby.js';
 import { createNet } from './net.js';
 
+window.__gameBooted = true; // (all the game's files loaded - see index.html)
+
 const BOT_COUNT = 19; // solo; a team gets a few more (the server says how many)
 // coins: every coin on the map is worth COIN_VALUE, plus rewards for
 // eliminations, for winning, for a good place and for staying alive
@@ -148,7 +150,9 @@ const bridge = createBridge('arena', {
             note.textContent = 'לא הצלחנו לשמור את המטבעות הפעם';
             note.classList.add('warn');
         } else {
-            note.textContent = `+${info.earned} מטבעות נשמרו בחשבון · יש לך ${info.coins.toLocaleString()}`;
+            note.textContent = info.earned > 0
+                ? `נשמרו ${info.earned.toLocaleString()} מטבעות בחשבון · יש לך ${info.coins.toLocaleString()}`
+                : `לא נאספו מטבעות הפעם · יש לך ${info.coins.toLocaleString()}`;
         }
     },
 });
@@ -437,11 +441,22 @@ function endMatch(won) {
     if (document.pointerLockElement) document.exitPointerLock();
     $('endTitle').textContent = won ? (team.on ? 'הקבוצה ניצחה! 🏆' : 'ניצחת! 🏆')
         : state.endNote === 'hostLeft' ? 'הקרב הסתיים' : team.on ? 'הקבוצה הודחה' : 'הודחת!';
-    $('endPlace').textContent = `#${state.place}`;
+    // the place, out of everyone who dropped onto the island
+    $('endPlace').innerHTML = `#${state.place}<small>מקום מתוך ${actors.length}</small>`;
     $('endKills').textContent = player.kills;
     $('endCoins').textContent = player.coins;
     const e = state.earn;
-    $('endBreakdown').innerHTML = `<span>🪙 איסוף ${player.coins - e.kills - e.place - e.survive}</span><span>🎯 חיסולים ${e.kills}</span><span>🏅 מקום ${e.place}</span><span>⏱️ שרידות ${e.survive}</span>`;
+    // where the coins came from (each chip is coins, not a count)
+    const picked = Math.max(0, player.coins - e.kills - e.place - e.survive);
+    const chips = [
+        ['🪙', picked, 'מטבעות שאספת'],
+        ['🎯', e.kills, `על ${player.kills} ${player.kills === 1 ? 'חיסול' : 'חיסולים'}`],
+        ['🏅', e.place, won ? 'על הניצחון' : `על מקום ${state.place}`],
+        ['⏱️', e.survive, 'על הזמן ששרדת'],
+    ].filter(([, v]) => v > 0);
+    $('endBreakdown').innerHTML = chips.length
+        ? `<p class="breakdown-title">מאיפה הגיעו המטבעות</p>${chips.map(([i, v, t]) => `<span>${i} <b>+${v}</b> ${t}</span>`).join('')}`
+        : '';
     const m = Math.floor(state.time / 60);
     $('endTime').textContent = `${m}:${Math.floor(state.time % 60).toString().padStart(2, '0')}`;
     const note = $('savedNote');
@@ -1157,7 +1172,10 @@ function renderLobby() {
     const bots = BOT_COUNT + 4 * (n - 1);
     $('readyHint').innerHTML = `${hint}${hint ? ' · ' : ''}${bots} בוטים`;
     const note = $('netNote');
-    if (net.status === 'offline') {
+    if (net.replaced) {
+        note.textContent = 'המשחק נפתח בחלון אחר עם אותו משתמש - אפשר לשחק רק באחד';
+        note.classList.remove('hidden');
+    } else if (net.status === 'offline') {
         note.textContent = 'משחק לבד - אין חיבור לשרת של הספרייה';
         note.classList.remove('hidden');
     } else if (net.status === 'connecting') {
@@ -1667,6 +1685,7 @@ if (new URLSearchParams(window.location.search).has('debug')) {
         net,
         team,
         startMatch,
+        endMatch,
         setView: (y, p) => { yaw = y; pitch = p; },
         refresh: (a) => refreshWeaponVisual(a),
         keys,

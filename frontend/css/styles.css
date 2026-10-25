@@ -12,6 +12,20 @@ body {
     border-radius: 4px;
 }
 
+/* Long book names wrap (up to 3 lines, the full name on hover) instead of
+   stretching the table, and the actions column stays pinned to the left edge,
+   so "החזר" / "איחור" are always in reach without scrolling sideways. */
+.col-book { white-space: normal; min-width: 150px; max-width: 280px; }
+.col-book .book-name {
+    display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden; overflow-wrap: anywhere; line-height: 1.35;
+}
+.col-actions { position: sticky; left: 0; z-index: 1; background-color: #fff; }
+.dark .col-actions { background-color: rgb(30 41 59); }
+.table-container.is-scrollable .col-actions { box-shadow: 10px 0 12px -10px rgba(15, 23, 42, 0.25); }
+thead .col-actions { background-color: rgb(248 250 252); }
+.dark thead .col-actions { background-color: rgb(15 23 42); }
+
 /* ---------- Games window: animations ---------- */
 @keyframes modal-in {
     from { opacity: 0; transform: translateY(12px) scale(0.97); }

@@ -647,6 +647,13 @@
         classes.forEach((c) => container.appendChild(createBtn(c, c)));
     }
 
+    // a soft shadow by the pinned actions column only when the table is wider than the screen
+    function markTableScroll() {
+        const box = document.querySelector('.table-container');
+        if (box) box.classList.toggle('is-scrollable', box.scrollWidth > box.clientWidth + 1);
+    }
+    window.addEventListener('resize', markTableScroll);
+
     function renderTable() {
         const tbody = document.getElementById('recordsTableBody');
         if (!tbody) return;
@@ -748,7 +755,7 @@
                 <td class="px-6 py-3.5 text-slate-600 dark:text-slate-400 text-sm">
                     <span class="bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-lg text-xs font-bold">${escapeHtml(record.studentClass || '-')}</span>
                 </td>
-                <td class="px-6 py-3.5 text-slate-700 dark:text-slate-300 text-sm font-medium">${escapeHtml(record.bookName)}</td>
+                <td class="px-6 py-3.5 text-slate-700 dark:text-slate-300 text-sm font-medium col-book"><span class="book-name" title="${escapeHtml(record.bookName)}">${escapeHtml(record.bookName)}</span></td>
                 <td class="px-6 py-3.5 text-slate-500 dark:text-slate-400 text-xs">${formatDate(record.borrowDate)}</td>
                 <td class="px-6 py-3.5 text-slate-500 dark:text-slate-400 text-xs">
                     ${formatDate(record.returnDate)}
@@ -756,7 +763,7 @@
                 </td>
                 <td class="px-6 py-3.5">${statusHtml}</td>
                 <td class="px-6 py-3.5">${noteCellHtml}</td>
-                <td class="px-6 py-3.5">
+                <td class="px-4 py-3.5 col-actions">
                     <div class="flex justify-center items-center gap-1.5">
                         ${actionHtml}
                         <button data-delete-record data-id="${escapeHtml(record.id)}" class="text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 p-2 rounded-xl transition-all" title="מחק רשומה">
@@ -771,6 +778,7 @@
         tbody.querySelectorAll('[data-status-btn]').forEach((btn) => {
             btn.addEventListener('click', () => handleStatusChange(btn.dataset.id, btn.dataset.status));
         });
+        markTableScroll();
         tbody.querySelectorAll('[data-note-btn]').forEach((btn) => {
             btn.addEventListener('click', () => openNoteModal(btn.dataset.id));
         });
@@ -801,7 +809,15 @@
             showToast('נא למלא את כל השדות', true);
             return;
         }
+        if (borrowDate && returnDate && returnDate < borrowDate) {
+            showToast('תאריך ההחזרה לא יכול להיות לפני תאריך ההשאלה', true);
+            return;
+        }
 
+        // one click = one record (no doubles from a quick double-click)
+        const submitBtn = document.getElementById('addRecordSubmitBtn');
+        if (submitBtn.disabled) return;
+        submitBtn.disabled = true;
         try {
             await window.api.addRecord({ studentName, studentClass, bookName, borrowDate, returnDate, note });
             showToast('ההשאלה נשמרה בהצלחה!');
@@ -815,6 +831,8 @@
             await loadRecords();
         } catch (err) {
             showToast(errorMessage(err, 'שגיאה בשמירת ההשאלה'), true);
+        } finally {
+            submitBtn.disabled = false;
         }
     }
 
@@ -965,12 +983,15 @@
         });
     }
 
-    function startGame(id) {
+    async function startGame(id) {
         const game = GAMES[id];
         if (!game) return;
         currentGame = id;
         setGameHeader(game);
         showGameView('game');
+        // your record and skin come from your account: make sure they're here first
+        if (!gameProfile) await loadGameProfile();
+        if (currentGame !== id) return;
 
         const frame = document.getElementById('gameFrame');
         frame.title = game.title;
@@ -979,7 +1000,7 @@
         const params = new URLSearchParams();
         const skin = gameProfile && gameProfile.equipped;
         if (skin) params.set('skin', skin);
-        if (gameProfile) params.set('best', String(readBest(id)));
+        if (gameProfile && gameProfile.best) params.set('best', String(readBest(id)));
         const qs = params.toString();
         frame.src = qs ? `${game.url}?${qs}` : game.url;
         frame.addEventListener('load', () => frame.focus(), { once: true });
@@ -1001,6 +1022,9 @@
         liveSocket = ws;
         ws.onopen = () => {
             liveRetries = 0;
+            // this tab's own login (if it has one) - see api.js
+            const token = window.hillelTabSession && window.hillelTabSession.get();
+            if (token) ws.send(JSON.stringify({ type: 'auth', token }));
             ws.send(JSON.stringify({ type: 'hello', where: 'site' }));
         };
         ws.onmessage = (e) => {
@@ -1308,7 +1332,10 @@
         await completePurchase(itemId);
     }
 
+    let buying = false; // one purchase at a time (a quick double-click buys once)
     async function completePurchase(itemId) {
+        if (buying) return;
+        buying = true;
         try {
             const button = document.querySelector(`[data-buy="${itemId}"]`) || document.getElementById('shopGrid');
             const result = await window.api.buyShopItem(itemId);
@@ -1328,6 +1355,8 @@
         } catch (err) {
             showToast(errorMessage(err, 'הקנייה נכשלה'), true);
             loadGameProfile();
+        } finally {
+            buying = false;
         }
     }
 
@@ -1413,8 +1442,15 @@
             }
         });
 
-        document.getElementById('setThemeLightBtn').addEventListener('click', () => setTheme('light'));
-        document.getElementById('setThemeDarkBtn').addEventListener('click', () => setTheme('dark'));
+        // picking a theme also closes the menu
+        document.getElementById('setThemeLightBtn').addEventListener('click', () => {
+            setTheme('light');
+            document.getElementById('userDropdown').classList.add('hidden');
+        });
+        document.getElementById('setThemeDarkBtn').addEventListener('click', () => {
+            setTheme('dark');
+            document.getElementById('userDropdown').classList.add('hidden');
+        });
         document.getElementById('myPasswordBtn').addEventListener('click', openMyPasswordModal);
         document.getElementById('logoutBtn').addEventListener('click', logout);
 

@@ -20,7 +20,7 @@ function norm(name) {
   return String(name || '').trim().toLocaleLowerCase();
 }
 
-function createPartyHub({ now = () => Date.now(), random = () => Math.random() } = {}) {
+function createPartyHub({ now = () => Date.now(), random = () => Math.random(), arenaGraceMs = 10000 } = {}) {
   // username -> { name, sockets: Set<ws>, partyId, skin, goneTimer }
   const users = new Map();
   // partyId -> { id, leader, members: [username], ready: Set, invites: Map<username, { at }>, inMatch }
@@ -33,7 +33,7 @@ function createPartyHub({ now = () => Date.now(), random = () => Math.random() }
   function user(name) {
     let u = users.get(name);
     if (!u) {
-      u = { name, sockets: new Set(), partyId: null, skin: '', goneTimer: null };
+      u = { name, sockets: new Set(), partyId: null, skin: '', goneTimer: null, arenaGoneTimer: null };
       users.set(name, u);
     }
     return u;
@@ -143,6 +143,20 @@ function createPartyHub({ now = () => Date.now(), random = () => Math.random() }
       case 'hello': {
         ws.where = msg.where === 'arena' ? 'arena' : 'site';
         send(ws, { type: 'welcome', username: name });
+        if (ws.where === 'arena') {
+          // back in the game (e.g. after a short drop): the match goes on
+          if (u.arenaGoneTimer) {
+            clearTimeout(u.arenaGoneTimer);
+            u.arenaGoneTimer = null;
+          }
+          // the same user opened the game somewhere else: only the newest one plays
+          for (const other of [...u.sockets]) {
+            if (other === ws || other.where !== 'arena') continue;
+            other.where = 'replaced';
+            send(other, { type: 'replaced' });
+            other.close(4002, 'Opened elsewhere');
+          }
+        }
         if (typeof msg.skin === 'string' && SKIN_IDS.has(msg.skin)) u.skin = msg.skin;
         if (ws.where === 'arena') {
           const p = ensureParty(name);
@@ -271,9 +285,18 @@ function createPartyHub({ now = () => Date.now(), random = () => Math.random() }
       if (ws.where === 'arena' && p) {
         p.ready.delete(username);
         if (!inArena(username)) {
-          // left the game screen: the others see them as gone from the match
-          for (const m of p.members) if (m !== username) sendTo(m, { type: 'left', username, game: true }, 'arena');
-          if (p.leader === username) p.inMatch = false;
+          // left the game screen. A short drop of the connection shouldn't end
+          // the match for everyone, so wait a little before telling the others.
+          if (u.arenaGoneTimer) clearTimeout(u.arenaGoneTimer);
+          u.arenaGoneTimer = setTimeout(() => {
+            u.arenaGoneTimer = null;
+            if (inArena(username)) return;
+            const party = partyOf(username);
+            if (!party) return;
+            for (const m of party.members) if (m !== username) sendTo(m, { type: 'left', username, game: true }, 'arena');
+            if (party.leader === username) party.inMatch = false;
+          }, arenaGraceMs);
+          if (u.arenaGoneTimer.unref) u.arenaGoneTimer.unref();
         }
         broadcastParty(p);
       }

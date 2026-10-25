@@ -73,8 +73,14 @@ export function addHeals(actor, heal, count, allowNewSlot = true) {
     return count - left;
 }
 
-/** The 3D look of a healing item (lying on the ground or held in the hand). */
+/** The 3D look of a healing item (lying on the ground or held in the hand). Built once per kind, copies share it. */
+const healCache = new Map();
 export function healMesh(item) {
+    if (!healCache.has(item)) healCache.set(item, buildHealMesh(item));
+    return healCache.get(item).clone(true);
+}
+
+function buildHealMesh(item) {
     const g = new THREE.Group();
     const color = HEALS[item].color;
     if (item === 'bandage') {

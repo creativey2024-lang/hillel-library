@@ -21,7 +21,25 @@ function staticMiddleware(rootDir) {
 
     fs.stat(filePath, (err, stat) => {
       if (!err && stat.isFile()) {
+        // Browsers check back for a newer copy every time (and get a quick
+        // "304 not changed" if there isn't one), so after an update nobody
+        // ends up with old and new game files mixed together.
+        const etag = `W/"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`;
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('ETag', etag);
+        res.setHeader('Last-Modified', stat.mtime.toUTCString());
+        if (req.headers['if-none-match'] === etag) {
+          res.statusCode = 304;
+          return res.end();
+        }
         return res.sendFile(filePath);
+      }
+      // A missing file (like /games/x/game.js) is a real "not found" - sending
+      // the site's page instead would break the game in a confusing way.
+      if (path.extname(requestedPath)) {
+        res.statusCode = 404;
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        return res.end('קובץ לא נמצא');
       }
       return res.sendFile(indexFile);
     });

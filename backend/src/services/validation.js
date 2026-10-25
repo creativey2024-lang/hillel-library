@@ -2,6 +2,16 @@ const MAX_NOTE_LENGTH = 500;
 const HEBREW_ONLY_REGEX = /^[א-ת]+$/;
 const VALID_STATUSES = ['borrowed', 'returned', 'late'];
 
+const MAX_STUDENT_NAME_LENGTH = 60;
+const MAX_BOOK_NAME_LENGTH = 200;
+
+// a real calendar date written as YYYY-MM-DD (as the date fields send it)
+function isDateString(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
 function validateNewRecord(data) {
   const errors = [];
   const studentName = String(data.studentName || '').trim();
@@ -17,6 +27,13 @@ function validateNewRecord(data) {
   if (!borrowDate) errors.push('נא למלא תאריך השאלה');
   if (!returnDate) errors.push('נא למלא תאריך החזרה מיועד');
   if (note.length > MAX_NOTE_LENGTH) errors.push(`ההערה ארוכה מדי (עד ${MAX_NOTE_LENGTH} תווים)`);
+  if (studentName.length > MAX_STUDENT_NAME_LENGTH) errors.push(`שם התלמיד/ה ארוך מדי (עד ${MAX_STUDENT_NAME_LENGTH} תווים)`);
+  if (bookName.length > MAX_BOOK_NAME_LENGTH) errors.push(`שם הספר ארוך מדי (עד ${MAX_BOOK_NAME_LENGTH} תווים)`);
+  if (borrowDate && !isDateString(borrowDate)) errors.push('תאריך ההשאלה לא תקין');
+  if (returnDate && !isDateString(returnDate)) errors.push('תאריך ההחזרה לא תקין');
+  if (isDateString(borrowDate) && isDateString(returnDate) && returnDate < borrowDate) {
+    errors.push('תאריך ההחזרה לא יכול להיות לפני תאריך ההשאלה');
+  }
 
   return {
     valid: errors.length === 0,

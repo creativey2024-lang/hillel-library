@@ -65,7 +65,7 @@ async function main() {
 
   const app = createApp();
 
-  app.use(attachUser(JWT_SECRET));
+  app.use(attachUser(JWT_SECRET, { lookupStaff: (username) => store.findStaffByUsername(username) }));
 
   app.use('/api/auth', createAuthRouter({
     jwtSecret: JWT_SECRET,

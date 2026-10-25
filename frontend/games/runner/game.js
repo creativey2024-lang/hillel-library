@@ -21,8 +21,15 @@ import * as THREE from 'three';
 import { GLTFLoader } from '../shared/lib/loaders/GLTFLoader.js';
 import { applySkin, skinFromUrl } from '../shared/skins.js';
 import { POWERUPS, createPowerupMesh, createPowerupHud } from '../shared/powerups.js';
-import { createBridge, bestFromUrl } from '../shared/bridge.js';
+import * as bridgeLib from '../shared/bridge.js';
 import { createCoinFx } from '../shared/coinfx.js';
+
+window.__gameBooted = true; // (all the game's files loaded - see index.html)
+
+// (read through the module object, so an older copy of bridge.js on the server
+// can't stop the whole game from starting)
+const createBridge = bridgeLib.createBridge;
+const bestFromUrl = bridgeLib.bestFromUrl || (() => null);
 
 // ---------------------------------------------------------------- settings
 const TILE = 2.7;                 // size of one city tile in world units
@@ -746,7 +753,9 @@ function showSaved(info) {
         ui.savedNote.textContent = 'לא הצלחנו לשמור את המטבעות הפעם';
         ui.savedNote.classList.add('warn');
     } else {
-        ui.savedNote.textContent = `+${info.earned} מטבעות נשמרו בחשבון · יש לך ${info.coins.toLocaleString()}`;
+        ui.savedNote.textContent = info.earned > 0
+            ? `נשמרו ${info.earned.toLocaleString()} מטבעות בחשבון · יש לך ${info.coins.toLocaleString()}`
+            : `לא נאספו מטבעות הפעם · יש לך ${info.coins.toLocaleString()}`;
     }
 }
 

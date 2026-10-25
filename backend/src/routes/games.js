@@ -129,10 +129,12 @@ function createGamesRouter({ jwtSecret, sessionTtlSeconds, isProd, superAdminUse
       if (outcome.error) return res.status(outcome.status).json({ error: outcome.error });
 
       let user = req.user;
+      let sessionToken;
       if (item.type === 'role') {
         // New session with the admin role, so it works immediately without logging out.
         user = { username, role: 'admin', isSuperAdmin: false };
         const token = tokens.sign(user, jwtSecret, sessionTtlSeconds);
+        sessionToken = token;
         res.setHeader('Set-Cookie', serializeCookie('hillel_session', token, { maxAge: sessionTtlSeconds, secure: isProd }));
       }
 
@@ -140,6 +142,7 @@ function createGamesRouter({ jwtSecret, sessionTtlSeconds, isProd, superAdminUse
         ok: true,
         item: item.id,
         roleChanged: item.type === 'role',
+        sessionToken,
         profile: economy.publicProfile(outcome.profile, { isAdmin: isAdmin(user) }),
       });
     } catch (err) {

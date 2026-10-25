@@ -10,6 +10,7 @@ export function createNet() {
         me: null,
         party: null,
         skin: '',
+        replaced: false, // the same user opened the game somewhere else
         on(type, fn) {
             (listeners[type] = listeners[type] || []).push(fn);
         },
@@ -48,9 +49,16 @@ export function createNet() {
         }
         ws.onopen = () => {
             retries = 0;
-            net.status = 'online';
+            // this browser tab's own login (the library site keeps it per tab),
+            // so another account logged in on another tab doesn't take over here
+            let token = '';
+            try {
+                token = sessionStorage.getItem('hillel_tab_session') || '';
+            } catch (err) {
+                // storage blocked: the site's cookie is used
+            }
+            if (token) ws.send(JSON.stringify({ type: 'auth', token }));
             ws.send(JSON.stringify({ type: 'hello', where: 'arena', skin: net.skin }));
-            emit('status', net);
         };
         ws.onmessage = (e) => {
             let msg;
@@ -59,14 +67,22 @@ export function createNet() {
             } catch (err) {
                 return;
             }
-            if (msg.type === 'welcome') net.me = msg.username;
+            if (msg.type === 'welcome') {
+                net.me = msg.username;
+                net.status = 'online';
+                emit('status', net);
+            }
+            if (msg.type === 'replaced') net.replaced = true;
             if (msg.type === 'party') net.party = msg.party;
             emit(msg.type, msg);
         };
-        ws.onclose = () => {
+        ws.onclose = (e) => {
             const was = net.status;
             net.status = 'offline';
+            net.party = null;
             emit('status', net);
+            // not logged in, or the game was opened elsewhere: don't try again
+            if (net.replaced || (e && (e.code === 4001 || e.code === 4002))) return;
             // came online before and dropped: try again a few times
             if (was === 'online' && retries < 5) {
                 retries += 1;

@@ -121,3 +121,12 @@ test('validation: status must be one of the known values', () => {
   assert.equal(validation.validateStatus('returned'), true);
   assert.equal(validation.validateStatus('lost'), false);
 });
+
+test('validateNewRecord: dates must be real and the return date not before the borrow date', () => {
+  const base = { studentName: 'דנה', studentClass: "ה'1", bookName: 'ספר', borrowDate: '2026-10-20' };
+  assert.equal(validation.validateNewRecord({ ...base, returnDate: '2026-10-01' }).valid, false);
+  assert.equal(validation.validateNewRecord({ ...base, returnDate: '2026-02-30' }).valid, false);
+  assert.equal(validation.validateNewRecord({ ...base, returnDate: 'מחר' }).valid, false);
+  assert.equal(validation.validateNewRecord({ ...base, returnDate: '2026-10-20' }).valid, true);
+  assert.equal(validation.validateNewRecord({ ...base, returnDate: '2026-11-20', bookName: 'א'.repeat(201) }).valid, false);
+});

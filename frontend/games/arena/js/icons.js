@@ -87,7 +87,7 @@ export function itemIcon(item) {
         url = null;
     }
     scene.remove(holder);
-    holder.traverse((c) => { if (c.isMesh) c.geometry.dispose(); });
+    // (the item's shapes are shared with the game, so they're kept)
     cache[key] = url;
     return url;
 }
