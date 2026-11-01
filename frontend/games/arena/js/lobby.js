@@ -6,6 +6,7 @@
  */
 import * as THREE from 'three';
 import { applySkin } from '../../shared/skins.js';
+import { addGear } from '../../shared/gear.js';
 
 // four spots: you in the middle, your friends on both sides, a step back
 const SPOTS = [
@@ -132,10 +133,11 @@ export function createLobby({ renderer, gltf, labels, colors = null }) {
         return { group: g, ring, ringMat, disc, burst, burstMat, burstT: 1, member: null, model: null, mixer: null, skin: null, clips: null, inT: 1, appear: 1 };
     });
 
-    function makeCharacter(skinId) {
+    function makeCharacter(skinId, gearSeed) {
         const model = gltf.scene.clone(true);
         model.scale.setScalar(1.55);
         model.traverse((c) => { if (c.isMesh) c.material = c.material.clone(); });
+        addGear(model, { seed: gearSeed });
         const mixer = new THREE.AnimationMixer(model);
         const clips = Object.fromEntries(gltf.animations.map((a) => [a.name, a]));
         if (clips.idle) mixer.clipAction(clips.idle).play();
@@ -158,7 +160,7 @@ export function createLobby({ renderer, gltf, labels, colors = null }) {
                 s.mixer = null;
                 s.skin = null;
                 if (m) {
-                    const c = makeCharacter(m.skin);
+                    const c = makeCharacter(m.skin, m.me ? (m.name === 'את/ה' ? 'me' : m.name) : m.name);
                     c.model.rotation.y = -SPOTS[i].x * 0.07;
                     s.group.add(c.model);
                     Object.assign(s, { model: c.model, mixer: c.mixer, skin: c.skin, clips: c.clips });

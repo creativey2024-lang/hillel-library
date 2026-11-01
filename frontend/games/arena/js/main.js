@@ -30,6 +30,7 @@ import { createBotController } from './bots.js';
 import { createHud } from './hud.js';
 import { createAudio } from './audio.js';
 import { createLobby } from './lobby.js';
+import { fillIcons, iconSVG } from '../../shared/icons.js';
 import { createNet } from './net.js';
 
 window.__gameBooted = true; // (all the game's files loaded - see index.html)
@@ -250,7 +251,7 @@ function createActors(gltf, cfg) {
         actor.yaw = faceYaw;
     };
     const teamName = team.on ? 'humans' : null;
-    player = createActor({ scene, gltf, name: team.on ? cfg.me : 'אתה', isPlayer: true, team: teamName, gliderColor: TEAM_GLIDERS[myIndex % 4] });
+    player = createActor({ scene, gltf, name: team.on ? cfg.me : 'אתה', isPlayer: true, team: teamName, gliderColor: TEAM_GLIDERS[myIndex % 4], gearSeed: team.on ? cfg.me : 'me' });
     player.skin = applySkin({ model: player.model, scene, skinId: skinFromUrl(), height: 1.76 });
     player.netName = cfg.me;
     spawnAt(player, myIndex);
@@ -449,13 +450,13 @@ function endMatch(won) {
     // where the coins came from (each chip is coins, not a count)
     const picked = Math.max(0, player.coins - e.kills - e.place - e.survive);
     const chips = [
-        ['🪙', picked, 'מטבעות שאספת'],
-        ['🎯', e.kills, `על ${player.kills} ${player.kills === 1 ? 'חיסול' : 'חיסולים'}`],
-        ['🏅', e.place, won ? 'על הניצחון' : `על מקום ${state.place}`],
-        ['⏱️', e.survive, 'על הזמן ששרדת'],
+        ['coin', picked, 'מטבעות שאספת'],
+        ['skull', e.kills, `על ${player.kills} ${player.kills === 1 ? 'חיסול' : 'חיסולים'}`],
+        ['trophy', e.place, won ? 'על הניצחון' : `על מקום ${state.place}`],
+        ['heart', e.survive, 'על הזמן ששרדת'],
     ].filter(([, v]) => v > 0);
     $('endBreakdown').innerHTML = chips.length
-        ? `<p class="breakdown-title">מאיפה הגיעו המטבעות</p>${chips.map(([i, v, t]) => `<span>${i} <b>+${v}</b> ${t}</span>`).join('')}`
+        ? `<p class="breakdown-title">מאיפה הגיעו המטבעות</p>${chips.map(([i, v, t]) => `<span class="chip">${iconSVG(i, 16)} <b>+${v}</b> ${t}</span>`).join('')}`
         : '';
     const m = Math.floor(state.time / 60);
     $('endTime').textContent = `${m}:${Math.floor(state.time % 60).toString().padStart(2, '0')}`;
@@ -1760,6 +1761,7 @@ function loop() {
 }
 
 async function init() {
+    fillIcons();
     try {
         await load();
     } catch (err) {

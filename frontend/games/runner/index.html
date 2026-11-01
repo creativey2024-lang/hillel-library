@@ -15,10 +15,11 @@
             <span id="hudScore" class="hud-value">0</span>
         </div>
         <div class="hud-box">
-            <span class="hud-coin"></span>
+            <i class="hud-coin" data-icon="coin" data-size="20"></i>
             <span id="hudCoins" class="hud-value">0</span>
         </div>
         <div class="hud-box hud-best">
+            <i data-icon="trophy" data-size="17"></i>
             <span class="hud-label">שיא</span>
             <span id="hudBest" class="hud-value">0</span>
         </div>
@@ -44,7 +45,7 @@
                 <li><kbd>←</kbd> <kbd>→</kbd> או החלקה ימינה / שמאלה — החלפת מסלול</li>
                 <li><kbd>↑</kbd> / <kbd>רווח</kbd> או הקשה — קפיצה</li>
                 <li><kbd>P</kbd> — השהיה</li>
-                <li class="powers">אספו: <b style="color:#16a34a">נעלי קפיצה</b> (קופצים מעל מכוניות ורכבות) · <b style="color:#dc2626">מגנט</b> · <b style="color:#d97706">x2 מטבעות</b></li>
+                <li id="powerLegend" class="powers"></li>
             </ul>
             <button id="startBtn" class="primary-btn" type="button">התחל לרוץ</button>
         </div>
@@ -62,8 +63,8 @@
             <h2 id="gameOverTitle">אוי! נתקלת במכשול</h2>
             <div class="results">
                 <div><span class="hud-label">ניקוד</span><strong id="finalScore">0</strong></div>
-                <div><span class="hud-label">מטבעות</span><strong id="finalCoins">0</strong></div>
-                <div><span class="hud-label">שיא</span><strong id="finalBest">0</strong></div>
+                <div><span class="hud-label"><i data-icon="coin" data-size="14" style="vertical-align:-2px"></i> מטבעות</span><strong id="finalCoins">0</strong></div>
+                <div><span class="hud-label"><i data-icon="trophy" data-size="14" style="vertical-align:-2px"></i> שיא</span><strong id="finalBest">0</strong></div>
             </div>
             <p id="newBestBadge" class="new-best hidden">שיא חדש!</p>
             <p id="savedNote" class="saved-note hidden"></p>

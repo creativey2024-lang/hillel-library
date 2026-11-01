@@ -2,8 +2,8 @@
  * הגנה על הספרייה (Library Defense) - a co-op wave defense game for the
  * Hillel library site: up to 4 friends defend the Golden Book in the middle
  * of a huge magical library from waves of monsters coming out of four
- * portals. Kill monsters for points, spend them in the shops under the dome
- * (weapons, ammo, healing, a stronger book), climb the book stacks to shoot
+ * portals. Every 10 monsters you kill upgrade your gun (and every 30 give a
+ * new one), * (weapons, ammo, healing, a stronger book), climb the book stacks to shoot
  * from the top of the shelves, revive your friends, and survive as many
  * waves as you can. Every 5th wave the Ink Titan comes.
  *
@@ -22,7 +22,8 @@ import { moveActor } from '../../arena/js/movement.js';
 import { createAudio } from '../../arena/js/audio.js';
 import { createNet } from '../../arena/js/net.js';
 import { itemIcon } from '../../arena/js/icons.js';
-import { createLibrary, HALF, STATIONS, PLAYER_SPAWNS, BOOK_POS } from './library.js';
+import { createLibrary, HALF, PLAYER_SPAWNS, BOOK_POS } from './library.js';
+import { fillIcons, iconSVG } from '../../shared/icons.js';
 import { KINDS, KIND_LIST, createMonster, createMonsterSim, updateMonsterVisual, updateDying, disposeMonster, rayHitsMonster, monsterCenter, setMonsterShadows } from './monsters.js';
 import { planWave, hpScale, spawnGap, maxAlive, BREAK_SECONDS, FIRST_BREAK } from './waves.js';
 import { createFx } from './fx.js';
@@ -41,8 +42,10 @@ const RESPAWN_SOLO = 8;
 const RESPAWN_TEAM = 14;
 const REVIVE_TIME = 1.6;
 const WAVE_COINS = (w) => 4 + w * 2;
-const WAVE_POINTS = (w) => 120 + w * 40;
-const TEAM_SHARE = 0.3; // teammates get this much of the points for a kill
+// upgrades: every KILLS_PER_UPGRADE kills the gun in your hands gets better;
+// every 3rd upgrade is a new weapon instead (from this list, in order)
+const KILLS_PER_UPGRADE = 10;
+const NEW_WEAPONS = [['shotgun', 2], ['rocket', 2], ['freeze', 3], ['lightning', 3], ['minigun', 3], ['heavy', 3], ['rocket', 4], ['lightning', 4]];
 
 const $ = (id) => document.getElementById(id);
 const touchMode = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
@@ -118,7 +121,8 @@ const state = {
     queue: [],
     spawnT: 0,
     left: 0,
-    points: 0,
+    upKills: 0,
+    upgrades: 0,
     coins: 0,
     kills: 0,
     earn: { kills: 0, waves: 0, boss: 0 },
@@ -192,7 +196,7 @@ async function load() {
 
 // ------------------------------------------------------------------ players
 function newPlayer(name, opts = {}) {
-    const a = createActor({ scene, gltf: characterGltf, name, isPlayer: opts.isPlayer, human: true, team: 'library' });
+    const a = createActor({ scene, gltf: characterGltf, name, isPlayer: opts.isPlayer, human: true, team: 'library', gearSeed: opts.gearSeed ?? name });
     a.phase = 'ground';
     a.onGround = true;
     a.glider.visible = false;
@@ -234,7 +238,7 @@ function startMatch(cfg) {
     team.members = cfg.members;
     stage.hide();
 
-    player = newPlayer('את/ה', { isPlayer: true });
+    player = newPlayer('את/ה', { isPlayer: true, gearSeed: team.on ? cfg.me : 'me' });
     giveStarterKit(player);
     if (player.skin === undefined) player.skin = applySkin({ model: player.model, scene, skinId: skinFromUrl(), height: 1.76 });
     const myIndex = Math.max(0, cfg.members.indexOf(cfg.me));
@@ -274,7 +278,7 @@ function startMatch(cfg) {
     player.yaw = yaw;
     requestLock();
     bridge.runStarted();
-    banner('הגנו על ספר הזהב!', team.on ? `${cfg.members.length} מגינים · המפלצות מגיעות בעוד ${FIRST_BREAK} שניות` : `המפלצות מגיעות בעוד ${FIRST_BREAK} שניות · קנו בחנויות שבכיפה`);
+    banner('הגנו על ספר הזהב!', team.on ? `${cfg.members.length} מגינים · המפלצות מגיעות בעוד ${FIRST_BREAK} שניות` : `המפלצות מגיעות בעוד ${FIRST_BREAK} שניות · כל ${KILLS_PER_UPGRADE} חיסולים הנשק משתדרג`);
     clock.getDelta();
 }
 
@@ -307,11 +311,11 @@ function endMatch(reason = 'book') {
     $('endTime').textContent = `${m}:${Math.floor(state.time % 60).toString().padStart(2, '0')}`;
     const e = state.earn;
     const chips = [
-        ['👾', e.kills, `על ${state.kills} מפלצות`],
-        ['🌊', e.waves, 'על הגלים ששרדתם'],
-        ['👑', e.boss, 'על טיטאנים'],
+        ['skull', e.kills, `על ${state.kills} מפלצות`],
+        ['book', e.waves, 'על הגלים ששרדתם'],
+        ['trophy', e.boss, 'על טיטאנים'],
     ].filter(([, v]) => v > 0);
-    $('endBreakdown').innerHTML = chips.length ? `<p class="breakdown-title">מאיפה הגיעו המטבעות</p>${chips.map(([i, v, t]) => `<span>${i} <b>+${v}</b> ${t}</span>`).join('')}` : '';
+    $('endBreakdown').innerHTML = chips.length ? `<p class="breakdown-title">מאיפה הגיעו המטבעות</p>${chips.map(([i, v, t]) => `<span class="chip">${iconSVG(i, 16)} <b>+${v}</b> ${t}</span>`).join('')}` : '';
     const note = $('savedNote');
     note.classList.toggle('hidden', !bridge.embedded);
     note.classList.remove('warn');
@@ -365,19 +369,82 @@ function waveCleared() {
     state.phase = 'break';
     state.breakT = BREAK_SECONDS;
     // the book heals a little between waves
-    state.bookHp = Math.min(state.bookMax, state.bookHp + state.bookMax * 0.08);
+    state.bookHp = Math.min(state.bookMax, state.bookHp + state.bookMax * 0.12);
     onWaveCleared(state.wave);
 }
 
 // everyone (the leader and the others) gets the wave reward on their own computer
+// (no shops: after every wave you get ammo, a grenade and your health back)
 function onWaveCleared(w) {
-    const pts = WAVE_POINTS(w);
     const coins = WAVE_COINS(w);
-    state.points += pts;
     state.coins += coins;
     state.earn.waves += coins;
-    banner(`גל ${w} הושלם!`, `+${pts} נקודות · +${coins} מטבעות · הפסקה של ${BREAK_SECONDS} שניות (B - להמשיך עכשיו)`, 'good');
+    if (player) {
+        for (const k of Object.keys(MAX_AMMO)) player.ammo[k] = Math.min(MAX_AMMO[k], player.ammo[k] + Math.ceil(MAX_AMMO[k] * 0.5));
+        player.grenades = Math.min(GRENADE_MAX, player.grenades + 1);
+        if (!player.down) {
+            player.hp = 100;
+            player.shield = Math.min(100, player.shield + 50);
+        }
+    }
+    banner(`גל ${w} הושלם!`, `+${coins} מטבעות · תחמושת מולאה · +1 רימון · חיים מלאים · הגל הבא בעוד ${BREAK_SECONDS} שניות (B - עכשיו)`, 'good');
     audio.chime();
+}
+
+// ------------------------------------------------------------------ upgrades (every 10 kills)
+const RARITY_NAMES = () => RARITIES.map((r) => r.name);
+// what the next upgrade will be (shown on the screen)
+function nextReward() {
+    if ((state.upgrades + 1) % 3 === 0) {
+        const [kind, r] = NEW_WEAPONS[Math.floor(state.upgrades / 3) % NEW_WEAPONS.length];
+        return { type: 'new', text: `נשק חדש: ${WEAPONS[kind].name} ${RARITIES[r].name}` };
+    }
+    const w = upgradeTarget();
+    if (!w) return { type: 'none', text: 'כל הנשקים אגדיים!' };
+    return { type: 'up', w, text: `${WEAPONS[w.kind].name}: ${RARITIES[w.rarity].name} ← ${RARITIES[w.rarity + 1].name}` };
+}
+// the gun in your hands, or (if it's already legendary) your weakest gun
+function upgradeTarget() {
+    const cur = currentWeapon(player);
+    if (cur && cur.rarity < 4) return cur;
+    let best = null;
+    for (const s of player.slots) if (s && s.rarity < 4 && (!best || s.rarity < best.rarity)) best = s;
+    return best;
+}
+function doUpgrade() {
+    state.upKills -= KILLS_PER_UPGRADE;
+    const next = nextReward();
+    state.upgrades += 1;
+    if (next.type === 'new') {
+        const [kind, r] = NEW_WEAPONS[Math.floor((state.upgrades - 1) / 3) % NEW_WEAPONS.length];
+        const w = makeWeapon(kind, r);
+        // into an empty slot, or instead of your weakest gun
+        let slot = player.slots.findIndex((x) => !x);
+        if (slot < 0) {
+            slot = 0;
+            player.slots.forEach((x, i) => { if (x.rarity < player.slots[slot].rarity) slot = i; });
+        }
+        player.slots[slot] = w;
+        const def = WEAPONS[kind];
+        player.ammo[def.ammo] = Math.min(MAX_AMMO[def.ammo], Math.max(player.ammo[def.ammo], AMMO[def.ammo].box * 4));
+        selectSlot(slot, true);
+        banner('נשק חדש!', `${def.name} ${RARITIES[r].name} - על ${state.upgrades * KILLS_PER_UPGRADE} חיסולים`, 'good');
+    } else if (next.type === 'up') {
+        const w = next.w;
+        w.rarity += 1;
+        w.ammoInMag = magSize(w);
+        refreshWeaponVisual(player);
+        const r = RARITIES[w.rarity];
+        banner('הנשק שודרג!', `${WEAPONS[w.kind].name}: ${RARITIES[w.rarity - 1].name} ← ${r.name} · נזק ${Math.round(weaponDamage(w) * WEAPONS[w.kind].pellets)}`, 'good');
+    } else {
+        // nothing left to upgrade: a full heal instead
+        player.hp = 100;
+        player.shield = 100;
+        banner('בונוס!', 'כל הנשקים אגדיים - חיים ומגן מלאים', 'good');
+    }
+    audio.chime();
+    fx.sparkle(player.pos.clone().setY(player.pos.y + 1.4), 0xfacc15);
+    fx.poof(player.pos.clone().setY(player.pos.y + 1), 0xfacc15, 2);
 }
 
 // ------------------------------------------------------------------ simulation hooks (leader)
@@ -439,18 +506,19 @@ function onMonsterDied(m, killer) {
     if (m.def.boss) fx.explosion(c, 6, 0xe879f9);
     audio.play('eliminate', { volume: 0.35 * listenerVolume(m.pos), rate: m.def.heavy ? 0.6 : 1.2 });
     const mine = killer === team.me;
-    const value = Math.round(m.def.points * (m.elite ? 3 : 1) * (m.mini ? 0.4 : 1) * (1 + state.wave * 0.04));
     if (mine) {
-        state.points += value;
         state.kills += 1;
+        // elites and bosses count for more on the way to the next upgrade
+        state.upKills += m.def.boss ? 10 : m.elite ? 3 : 1;
+        while (state.upKills >= KILLS_PER_UPGRADE && player) doUpgrade();
         const coins = (m.def.coins || 0) * (m.elite ? 2 : 1);
         state.coins += coins;
         if (m.def.boss) state.earn.boss += coins;
         else state.earn.kills += coins;
-        fx.number(c, value, 'coin');
-        feed(`${m.elite ? 'מוזהב ' : ''}${m.def.name}`, value);
+        if (coins) fx.number(c, coins, 'coin');
+        feed(`${m.elite ? 'מוזהב ' : ''}${m.def.name}`, coins);
         flashHitmarker('kill');
-    } else if (killer) state.points += Math.round(value * TEAM_SHARE);
+    }
     spawnDrops(m, c);
 }
 
@@ -789,7 +857,7 @@ function revive(by) {
         const [x, z] = PLAYER_SPAWNS[Math.floor(Math.random() * PLAYER_SPAWNS.length)];
         player.pos.set(x, lib.supportHeight(x, z, 5), z);
         player.vel.set(0, 0, 0);
-    } else toast(`💚 <b>${esc(by)}</b> הקים/ה אותך!`);
+    } else toast(`${iconSVG('heart', 16)} <b>${esc(by)}</b> הקים/ה אותך!`);
     fx.sparkle(new THREE.Vector3(player.pos.x, 1, player.pos.z), 0x86efac);
     audio.chime();
 }
@@ -1047,7 +1115,7 @@ function fireWeapon() {
     const def = WEAPONS[w.kind];
     if (def.special === 'spin' && state.spin < 0.55) return;
     if (w.ammoInMag <= 0) {
-        if (!startReload()) message('אין תחמושת - קנו בחנות "תחמושת"', 'kill');
+        if (!startReload()) message('אין תחמושת - מקבלים עוד בסוף כל גל, ומפלצות מפילות קופסאות', 'kill');
         return;
     }
     w.ammoInMag -= 1;
@@ -1239,7 +1307,7 @@ function updateRockets(dt) {
 
 function throwGrenade() {
     if (!player || player.down || player.grenades <= 0) {
-        if (player && player.grenades <= 0) message('אין רימונים - קנו בחנות "תחמושת"', 'kill');
+        if (player && player.grenades <= 0) message('אין רימונים - מקבלים רימון בסוף כל גל', 'kill');
         return;
     }
     player.grenades -= 1;
@@ -1275,12 +1343,7 @@ function nearestInteract() {
             bd = dist;
         }
     }
-    if (best) return best;
-    for (const s of STATIONS) {
-        const dist = Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
-        if (dist < (s.id === 'book' ? 1.9 : 2.5)) return { kind: 'station', s };
-    }
-    return null;
+    return best;
 }
 
 function interact() {
@@ -1294,55 +1357,10 @@ function interact() {
         }
         giveWeapon(it.d.weapon);
         audio.play('weapon_change', { volume: 0.5 });
-    } else if (it.kind === 'station') buy(it.s);
+    }
     // (reviving is a hold - see updatePlayer)
 }
 
-function buy(s) {
-    if (state.points < s.price) {
-        message(`צריך ${s.price} נקודות (יש לך ${state.points})`, 'kill');
-        audio.tone(180, { length: 0.2, type: 'square', volume: 0.06 });
-        return;
-    }
-    if (s.id === 'heal' && player.hp >= 100 && player.shield >= 100) {
-        message('החיים והמגן כבר מלאים', 'loot');
-        return;
-    }
-    if (s.id === 'ammo' && Object.keys(MAX_AMMO).every((k) => player.ammo[k] >= MAX_AMMO[k]) && player.grenades >= GRENADE_MAX) {
-        message('התחמושת כבר מלאה', 'loot');
-        return;
-    }
-    state.points -= s.price;
-    const at = new THREE.Vector3(s.x, 1.4, s.z);
-    if (s.id === 'crate' || s.id === 'gold') {
-        const w = s.id === 'gold' ? makeWeapon(Math.random() < 0.45 ? SPECIAL_POOL[Math.floor(Math.random() * SPECIAL_POOL.length)] : GUN_POOL[Math.floor(Math.random() * GUN_POOL.length)], Math.random() < 0.35 ? 4 : 3) : randomWeapon(0.05, 0.14);
-        giveWeapon(w);
-        audio.chime();
-        fx.sparkle(at, RARITIES[w.rarity].hex);
-        fx.poof(at, RARITIES[w.rarity].hex, 2.5);
-    } else if (s.id === 'ammo') {
-        for (const k of Object.keys(MAX_AMMO)) player.ammo[k] = Math.max(player.ammo[k], Math.round(MAX_AMMO[k] * (k === 'rockets' || k === 'energy' ? 0.6 : 1)));
-        player.grenades = GRENADE_MAX;
-        message('תחמושת ורימונים מלאים!', 'loot');
-        audio.play('weapon_change', { volume: 0.6, rate: 0.8 });
-        fx.sparkle(at, 0xbef264);
-    } else if (s.id === 'heal') {
-        player.hp = 100;
-        player.shield = 100;
-        message('חיים ומגן מלאים!', 'loot');
-        audio.chime();
-        fx.sparkle(at, 0xf9a8d4);
-    } else if (s.id === 'book') {
-        if (!team.on || team.host) {
-            state.bookMax += 250;
-            state.bookHp += 250;
-        } else net.relay({ t: 'bookUp' }, team.hostName);
-        message('ספר הזהב התחזק! +250', 'loot');
-        audio.chime();
-        fx.poof(new THREE.Vector3(0, 3, 0), 0xffd27a, 4);
-        lib.book.hit = 0.6;
-    }
-}
 
 // ------------------------------------------------------------------ input
 const keys = {};
@@ -1602,8 +1620,7 @@ function updatePlayer(dt) {
             net.relay({ t: 'revive' }, it.name);
             it.r.down = false;
             state.reviveT = 0;
-            toast(`💚 הקמת את <b>${esc(it.name)}</b>!`);
-            state.points += 100;
+            toast(`${iconSVG('heart', 16)} הקמת את <b>${esc(it.name)}</b>!`);
         }
     } else state.reviveT = 0;
 }
@@ -1674,10 +1691,10 @@ function toast(html, ms = 4500) {
     if (ms) setTimeout(() => div.remove(), ms);
     return div;
 }
-function feed(name, points) {
+function feed(name, coins) {
     const div = document.createElement('div');
-    div.className = 'feed-item';
-    div.innerHTML = `<b class="me">את/ה</b> ✦ ${esc(name)} <span class="gun">+${points}</span>`;
+    div.className = 'feed-item df-feed';
+    div.innerHTML = `${iconSVG('skull', 15)} <b class="me">את/ה</b> ${esc(name)}${coins ? ` <span class="gun">${iconSVG('coin', 13)} +${coins}</span>` : ''}`;
     const box = $('killFeed');
     box.prepend(div);
     while (box.children.length > 5) box.lastChild.remove();
@@ -1700,7 +1717,13 @@ function updateHud(dt) {
     $('hpText').textContent = Math.ceil(player.hp);
     $('shFill').style.width = `${player.shield}%`;
     $('shText').textContent = Math.ceil(player.shield);
-    $('pointsText').textContent = state.points.toLocaleString();
+    $('killText').textContent = state.kills.toLocaleString();
+    // the next upgrade: how many kills to go, and what it will be
+    const left = Math.max(0, KILLS_PER_UPGRADE - state.upKills);
+    $('upFill').style.width = `${Math.min(1, state.upKills / KILLS_PER_UPGRADE) * 100}%`;
+    $('upCount').textContent = `עוד ${left} ${left === 1 ? 'חיסול' : 'חיסולים'}`;
+    const nr = nextReward();
+    if ($('upNext').textContent !== nr.text) $('upNext').textContent = nr.text;
     $('coinText').textContent = state.coins.toLocaleString();
     $('nadeText').textContent = player.grenades;
     // weapon
@@ -1770,9 +1793,6 @@ function updateHud(dt) {
         else if (it.kind === 'weapon') {
             const r = RARITIES[it.d.weapon.rarity];
             html = `<kbd>E</kbd> לקחת <b style="color:${r.color}">${WEAPONS[it.d.weapon.kind].name} ${r.name}</b>`;
-        } else {
-            const can = state.points >= it.s.price;
-            html = `<kbd>E</kbd> ${it.s.name} · ${it.s.desc} · <b style="color:${can ? '#86efac' : '#fca5a5'}">${it.s.price} נקודות</b>`;
         }
         prompt.innerHTML = html;
         prompt.classList.remove('hidden');
@@ -1826,7 +1846,7 @@ function updateTeamHud() {
         el.style.display = vis ? '' : 'none';
         if (!vis) continue;
         el.style.transform = `translate(${((tmpV.x * 0.5 + 0.5) * window.innerWidth).toFixed(1)}px, ${((-tmpV.y * 0.5 + 0.5) * window.innerHeight).toFixed(1)}px) translate(-50%, -100%)`;
-        const inner = `${esc(name)}${r.down ? ' 🆘' : ''}<span class="tag-hp"><i style="width:${Math.max(0, r.hp)}%"></i></span>`;
+        const inner = `${esc(name)}${r.down ? ' · צריך עזרה!' : ''}<span class="tag-hp"><i style="width:${Math.max(0, r.hp)}%"></i></span>`;
         if (el.dataset.sig !== inner) {
             el.dataset.sig = inner;
             el.innerHTML = inner;
@@ -2088,7 +2108,7 @@ function showInvite(msg) {
     $('incoming').appendChild(card);
     incoming.set(msg.partyId, card);
     setTimeout(done, 60000);
-    if (state.mode !== 'ready') toast(`📨 <b>${esc(msg.from)}</b> הזמין/ה אותך - אפשר להצטרף אחרי המשחק`, 6000);
+    if (state.mode !== 'ready') toast(`${iconSVG('people', 16)} <b>${esc(msg.from)}</b> הזמין/ה אותך - אפשר להצטרף אחרי המשחק`, 6000);
     else audio.chime();
 }
 
@@ -2101,7 +2121,7 @@ function setupLobby() {
         msg.classList.toggle('err', !m.ok);
         msg.textContent = m.ok ? `ההזמנה נשלחה ל-${m.to} ✓` : m.error;
     });
-    net.on('joined', (m) => toast(`🎉 <b>${esc(m.username)}</b> הצטרף/ה לקבוצה`));
+    net.on('joined', (m) => toast(`${iconSVG('people', 16)} <b>${esc(m.username)}</b> הצטרף/ה לקבוצה`));
     net.on('joinedParty', (m) => {
         if (m.game && m.game !== 'defense' && state.mode === 'ready') goToGame(m.game);
     });
@@ -2161,6 +2181,7 @@ function setupLobby() {
 
 // ------------------------------------------------------------------ start
 async function init() {
+    fillIcons();
     resize();
     try {
         await load();
@@ -2189,7 +2210,7 @@ if (params.has('debug')) {
         drops,
         step: (dt) => update(dt),
         setView: (y, p) => { yaw = y; pitch = p; },
-        startMatch, endMatch, buy, interact, fireWeapon, throwGrenade, giveWeapon, damagePlayer,
+        startMatch, endMatch, doUpgrade, interact, fireWeapon, throwGrenade, giveWeapon, damagePlayer,
         renderer, scene, camera,
     };
 }

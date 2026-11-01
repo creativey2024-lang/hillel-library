@@ -15,10 +15,11 @@
             <span id="hudScore" class="hud-value">0</span>
         </div>
         <div class="hud-box">
-            <span class="hud-coin"></span>
+            <i class="hud-coin" data-icon="coin" data-size="20"></i>
             <span id="hudCoins" class="hud-value">0</span>
         </div>
         <div class="hud-box hud-best">
+            <i data-icon="trophy" data-size="17"></i>
             <span class="hud-label">שיא</span>
             <span id="hudBest" class="hud-value">0</span>
         </div>
@@ -44,7 +45,7 @@
                 <li><kbd>רווח</kbd> / <kbd>↑</kbd> או הקשה — קפיצה (לחיצה ארוכה = קפיצה גבוהה)</li>
                 <li><kbd>↓</kbd> או החלקה למטה — נחיתה מהירה</li>
                 <li>קפצו מתחת לקופסת ה־<b>?</b> כדי לקבל מטבעות בונוס, ועל <b>הקפיצים</b> כדי לעוף גבוה</li>
-                <li class="powers">אספו: <b style="color:#2563eb">קפיצה כפולה</b> · <b style="color:#9333ea">מגן</b> · <b style="color:#dc2626">מגנט</b> · <b style="color:#d97706">x2 מטבעות</b></li>
+                <li id="powerLegend" class="powers"></li>
                 <li><kbd>P</kbd> — השהיה</li>
             </ul>
             <button id="startBtn" class="primary-btn" type="button">התחל לקפוץ</button>
@@ -63,8 +64,8 @@
             <h2 id="gameOverTitle">אוי! נתקלת בלבנים</h2>
             <div class="results">
                 <div><span class="hud-label">ניקוד</span><strong id="finalScore">0</strong></div>
-                <div><span class="hud-label">מטבעות</span><strong id="finalCoins">0</strong></div>
-                <div><span class="hud-label">שיא</span><strong id="finalBest">0</strong></div>
+                <div><span class="hud-label"><i data-icon="coin" data-size="14" style="vertical-align:-2px"></i> מטבעות</span><strong id="finalCoins">0</strong></div>
+                <div><span class="hud-label"><i data-icon="trophy" data-size="14" style="vertical-align:-2px"></i> שיא</span><strong id="finalBest">0</strong></div>
             </div>
             <p id="newBestBadge" class="new-best hidden">שיא חדש!</p>
             <p id="savedNote" class="saved-note hidden"></p>

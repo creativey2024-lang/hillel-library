@@ -26,11 +26,15 @@
 import * as THREE from 'three';
 import { GLTFLoader } from '../shared/lib/loaders/GLTFLoader.js';
 import { applySkin, skinFromUrl } from '../shared/skins.js';
-import { POWERUPS, createPowerupMesh, createPowerupHud } from '../shared/powerups.js';
+import { POWERUPS, createPowerupMesh, createPowerupHud, renderPowerLegend } from '../shared/powerups.js';
+import { fillIcons } from '../shared/icons.js';
+import { addGear } from '../shared/gear.js';
 import * as bridgeLib from '../shared/bridge.js';
 import { createCoinFx } from '../shared/coinfx.js';
 
-window.__gameBooted = true; // (all the game's files loaded - see index.html)
+window.__gameBooted = true;
+fillIcons();
+renderPowerLegend(document.getElementById('powerLegend'), [['double', 'אפשר לקפוץ שוב באוויר'], ['shield', 'מציל אותך פעם אחת'], ['magnet', 'מושך אליך את כל המטבעות'], ['x2', 'כל מטבע שווה 2'], ['jetpack', 'עפים מעל הכול כמה שניות']]); // (all the game's files loaded - see index.html)
 
 // (read through the module object, so an older copy of bridge.js on the server
 // can't stop the whole game from starting)
@@ -41,10 +45,11 @@ const bestFromUrl = bridgeLib.bestFromUrl || (() => null);
 // T-Rex Runner values converted from pixels-per-frame (60 fps) to world units
 // per second, at roughly 40 px = 1 unit (the dino is ~47 px tall, our
 // character ~1.1 units).
-// (faster than the original: it starts quicker and keeps speeding up for about 1.5 minutes)
-const START_SPEED = 11.5;
-const MAX_SPEED = 27;
-const ACCELERATION = 0.17;
+// Starts at an easy pace, then speeds up more and more: after about two
+// minutes it's really fast.
+const START_SPEED = 9;
+const MAX_SPEED = 28;
+const SPEED_TIME = 120;           // seconds to reach top speed
 const CLEAR_TIME = 2.6;           // seconds of empty track at the start (T-Rex CLEAR_TIME 3000 ms)
 
 // Jump: a full press reaches JUMP_HEIGHT; letting go early cuts the jump
@@ -78,18 +83,18 @@ const MUTE_KEY = 'hillel_sky_hop_muted';
 // minSpeed = speed from which it can appear, multipleSpeed = speed from
 // which it can come in groups.
 const OBSTACLE_TYPES = [
-    { type: 'brick', weight: 45, minSpeed: 0, multipleSpeed: 13, maxSize: 3, minGap: 3 },
+    { type: 'brick', weight: 45, minSpeed: 0, multipleSpeed: 10.5, maxSize: 3, minGap: 3 },
     { type: 'pit', weight: 30, minSpeed: 0, minGap: 3 },
-    { type: 'tall', weight: 16, minSpeed: 13, multipleSpeed: 17.5, maxSize: 2, minGap: 3.5 },
-    { type: 'bonus', weight: 9, minSpeed: 12.5, minGap: 2 },
+    { type: 'tall', weight: 16, minSpeed: 10.5, multipleSpeed: 15, maxSize: 2, minGap: 3.5 },
+    { type: 'bonus', weight: 9, minSpeed: 10, minGap: 2 },
     // extras so it doesn't get boring: springs that throw you high into a
     // trail of coins, and power-ups
-    { type: 'spring', weight: 9, minSpeed: 11.9, minGap: 2 },
-    { type: 'item', weight: 8, minSpeed: 11.8, minGap: 2 },
+    { type: 'spring', weight: 9, minSpeed: 9.4, minGap: 2 },
+    { type: 'item', weight: 8, minSpeed: 9.3, minGap: 2 },
     // a wide chasm crossed on floating stepping stones
-    { type: 'chasm', weight: 8, minSpeed: 12.7, minGap: 3 },
+    { type: 'chasm', weight: 8, minSpeed: 10.2, minGap: 3 },
     // a high path of floating platforms full of coins
-    { type: 'upper', weight: 8, minSpeed: 12.3, minGap: 2 },
+    { type: 'upper', weight: 8, minSpeed: 9.8, minGap: 2 },
 ];
 
 const LEDGE_DEPTH = 2.2;
@@ -545,6 +550,7 @@ const player = {
 function buildPlayer() {
     player.root = new THREE.Group();
     const model = cloneModel('character', CHARACTER_SCALE);
+    addGear(model, { seed: 'me' }); // a backpack, a cap, shoes...
     // the model faces the camera; turn it to run to the right, slightly toward us
     model.rotation.y = Math.PI / 2 - 0.35;
     player.model = model;
@@ -1597,7 +1603,8 @@ let debugStepHook = null;
 
 function stepRun(dt) {
     state.elapsed += dt;
-    state.speed = Math.min(MAX_SPEED, state.speed + ACCELERATION * dt);
+    const k = Math.min(1, state.elapsed / SPEED_TIME);
+    state.speed = START_SPEED + (MAX_SPEED - START_SPEED) * k * k * (3 - 2 * k);
     speedProgress = (state.speed - START_SPEED) / (MAX_SPEED - START_SPEED);
     const move = state.speed * dt;
     player.x += move;
@@ -1737,6 +1744,12 @@ function update(dt) {
         coinFx.update(dt, running ? carryVelocity.set(state.speed, 0, 0) : null);
     }
     ui.coins.parentElement.classList.toggle('double', Boolean(powers.x2));
+    // x2: the coin counter shows two coins with "x2"
+    const coinIcon = ui.coins.parentElement.querySelector('[data-icon]');
+    if (coinIcon) {
+        coinIcon.dataset.icon = powers.x2 ? 'coins2' : 'coin';
+        fillIcons(ui.coins.parentElement);
+    }
 
     if (player.root) {
         player.root.position.set(player.x, player.y, 0);

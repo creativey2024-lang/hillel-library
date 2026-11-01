@@ -438,7 +438,23 @@ export function createWorld(scene, models, opts = {}) {
         awningC: plain(0x46a65a),
         lamp: plain(0xfff3c4, { emissive: 0xffd36a, emissiveIntensity: 1.1 }),
         fire: plain(0xffb347, { emissive: 0xff6a00, emissiveIntensity: 1.6, transparent: true, opacity: 0.9 }),
+        // house details: shutters, flowers, rugs, a chimney
+        shGreen: tm(0x3f7d4f, T.planks, 1.2),
+        shBlue: tm(0x3d6a9e, T.planks, 1.2),
+        shRed: tm(0x9e3b32, T.planks, 1.2),
+        shBrown: tm(0x6e4a2f, T.planks, 1.2),
+        flRed: plain(0xe2483d),
+        flYellow: plain(0xf5c518),
+        flPink: plain(0xf28bb8),
+        flWhite: plain(0xfafafa),
+        leaf: plain(0x3f8f3a),
+        pot: plain(0xb5582f),
+        rugRed: plain(0xa8323a),
+        rugBlue: plain(0x35558f),
+        gold: plain(0xd4a017, { metalness: 0.7, roughness: 0.35 }),
     };
+    const SHUTTERS = [M.shGreen, M.shBlue, M.shRed, M.shBrown];
+    const FLOWERS = [M.flRed, M.flYellow, M.flPink, M.flWhite];
     const PLASTERS = [M.cream, M.blue, M.pink, M.mint, M.white, M.yellow];
     const ROOFS = [M.roofRed, M.roofBrown, M.roofBlue, M.roofGreen, M.roofGrey];
 
@@ -631,14 +647,64 @@ export function createWorld(scene, models, opts = {}) {
         part(-door / 2 - 0.08, y, d / 2 + 0.02, 0.16, doorH + 0.1, 0.1, M.frame, false);
         part(door / 2 + 0.08, y, d / 2 + 0.02, 0.16, doorH + 0.1, 0.1, M.frame, false);
         part(0, y + doorH, d / 2 + 0.02, door + 0.32, 0.16, 0.1, M.frame, false);
-        // windows (glass + frame) on the back and the sides
+        // windows (glass + frame) on the back and the sides, with a cross in
+        // the glass, a sill, shutters, and sometimes a box of flowers
         const winY = y + 1.2;
+        const shutter = SHUTTERS[Math.floor(rng() * SHUTTERS.length)];
+        const flowersHere = rng() < 0.6;
         const addWin = (lx, lz, alongX) => {
             const sx = alongX ? 1.2 : 0.08;
             const sz = alongX ? 0.08 : 1.2;
+            const ox = alongX ? 0 : Math.sign(lx);
+            const oz = alongX ? Math.sign(lz) : 0;
             part(lx, winY - 0.08, lz, sx + (alongX ? 0.2 : 0.02), 1.26, sz + (alongX ? 0.02 : 0.2), M.frame, false);
-            part(lx + (alongX ? 0 : Math.sign(lx) * 0.03), winY, lz + (alongX ? Math.sign(lz) * 0.03 : 0), sx, 1.1, sz, M.glass, false);
+            part(lx + ox * 0.03, winY, lz + oz * 0.03, sx, 1.1, sz, M.glass, false);
+            // the cross in the glass
+            part(lx + ox * 0.07, winY + 0.5, lz + oz * 0.07, alongX ? 1.2 : 0.05, 0.07, alongX ? 0.05 : 1.2, M.frame, false);
+            part(lx + ox * 0.07, winY, lz + oz * 0.07, alongX ? 0.07 : 0.05, 1.1, alongX ? 0.05 : 0.07, M.frame, false);
+            // sill
+            part(lx + ox * 0.12, winY - 0.16, lz + oz * 0.12, alongX ? 1.5 : 0.25, 0.1, alongX ? 0.25 : 1.5, M.stoneDark, false);
+            // shutters on both sides
+            for (const k of [-1, 1]) {
+                const sxo = alongX ? k * 0.95 : 0;
+                const szo = alongX ? 0 : k * 0.95;
+                part(lx + sxo + ox * 0.08, winY - 0.05, lz + szo + oz * 0.08, alongX ? 0.55 : 0.06, 1.2, alongX ? 0.06 : 0.55, shutter, false);
+                part(lx + sxo + ox * 0.12, winY + 0.25, lz + szo + oz * 0.12, alongX ? 0.4 : 0.03, 0.05, alongX ? 0.03 : 0.4, M.frame, false);
+                part(lx + sxo + ox * 0.12, winY + 0.75, lz + szo + oz * 0.12, alongX ? 0.4 : 0.03, 0.05, alongX ? 0.03 : 0.4, M.frame, false);
+            }
+            // a flower box under the window
+            if (flowersHere) {
+                part(lx + ox * 0.28, winY - 0.45, lz + oz * 0.28, alongX ? 1.3 : 0.3, 0.28, alongX ? 0.3 : 1.3, M.woodDark, false);
+                for (let f = -2; f <= 2; f++) {
+                    const fx = lx + ox * 0.28 + (alongX ? f * 0.24 : 0);
+                    const fz = lz + oz * 0.28 + (alongX ? 0 : f * 0.24);
+                    part(fx, winY - 0.18, fz, 0.2, 0.12, 0.2, M.leaf, false);
+                    part(fx, winY - 0.08, fz, 0.13, 0.13, 0.13, FLOWERS[Math.floor(rng() * FLOWERS.length)], false);
+                }
+            }
         };
+        // corner posts and a stone band at the bottom of the walls
+        const trim = wallMat === M.stone || wallMat === M.stoneDark ? M.woodDark : M.frame;
+        for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) part(sx * (w / 2 + 0.02), y, sz * (d / 2 + 0.02), 0.32, wallH, 0.32, trim, false);
+        part(0, y, -d / 2 - 0.04, w + 0.1, 0.4, 0.1, M.stoneDark, false);
+        part(-w / 2 - 0.04, y, 0, 0.1, 0.4, d + 0.1, M.stoneDark, false);
+        part(w / 2 + 0.04, y, 0, 0.1, 0.4, d + 0.1, M.stoneDark, false);
+        // the door itself (open, against the inside wall), a handle, a step and a lamp
+        part(-door / 2 + 0.06, y, d / 2 - t - (door - 0.1) / 2, 0.08, doorH - 0.06, door - 0.1, M.woodDark, false);
+        part(-door / 2 + 0.14, y + 1.05, d / 2 - t - door + 0.35, 0.06, 0.06, 0.12, M.gold, false);
+        part(0, y - 0.12, d / 2 + 0.45, door + 0.7, 0.12, 0.8, M.stoneDark, false);
+        part(door / 2 + 0.42, y + doorH + 0.1, d / 2 + 0.12, 0.22, 0.3, 0.22, M.lamp, false);
+        part(door / 2 + 0.42, y + doorH + 0.4, d / 2 + 0.12, 0.3, 0.06, 0.3, M.darkMetal, false);
+        // flower pots by the door
+        if (!o.empty) {
+            for (const k of [-1, 1]) {
+                const [px, pz] = toWorld(k * (door / 2 + 0.7), d / 2 + 0.55);
+                addGeo(new THREE.CylinderGeometry(0.22, 0.16, 0.38, 10).translate(px, y + 0.19, pz), M.pot);
+                addGeo(new THREE.SphereGeometry(0.3, 10, 8).translate(px, y + 0.55, pz), M.leaf);
+                addGeo(new THREE.SphereGeometry(0.09, 6, 5).translate(px + 0.12, y + 0.72, pz + 0.1), FLOWERS[Math.floor(rng() * FLOWERS.length)]);
+                addGeo(new THREE.SphereGeometry(0.09, 6, 5).translate(px - 0.1, y + 0.75, pz - 0.05), FLOWERS[Math.floor(rng() * FLOWERS.length)]);
+            }
+        }
         for (let k = -1; k <= 1; k += 2) {
             if (w > 5) addWin(k * w * 0.25, -d / 2 - 0.02, true);
             if (d > 5) {
@@ -669,14 +735,29 @@ export function createWorld(scene, models, opts = {}) {
             addGeo(g, roofMat);
             const swap = rot % 2 === 1;
             addBox(cx, y + wallH + 0.3, cz, swap ? d : w, rh * 0.5, swap ? w : d);
+            // a ridge board on top and a brick chimney
+            part(0, y + wallH + 0.25 + rh, 0, o.ridgeAlongX ? rl : 0.3, 0.16, o.ridgeAlongX ? 0.3 : rl, M.woodDark, false);
+            if (!o.empty && w >= 6) {
+                part(w * 0.24, y + wallH, -d * 0.2, 0.75, rh + 1.0, 0.75, M.stoneDark, false);
+                part(w * 0.24, y + wallH + rh + 1.0, -d * 0.2, 0.95, 0.15, 0.95, M.darkMetal, false);
+            }
         }
         // an awning over the door (shops)
         if (o.awning) {
             part(0, y + doorH + 0.25, d / 2 + 0.75, door + 2.2, 0.12, 1.5, o.awning, false);
         }
-        // a table inside
+        // inside: a table with chairs, a rug, a chest of drawers and a picture
         if (w >= 6 && d >= 6 && !o.empty) {
             part(w * 0.22, y, -d * 0.18, 1.6, 0.8, 1.0, M.wood);
+            part(w * 0.22 - 1.1, y, -d * 0.18, 0.5, 0.45, 0.5, M.woodDark, false);
+            part(w * 0.22 - 1.1, y + 0.45, -d * 0.18 - 0.22, 0.5, 0.55, 0.08, M.woodDark, false);
+            part(w * 0.22 + 1.1, y, -d * 0.18, 0.5, 0.45, 0.5, M.woodDark, false);
+            part(w * 0.22 + 1.1, y + 0.45, -d * 0.18 + 0.22, 0.5, 0.55, 0.08, M.woodDark, false);
+            part(-w * 0.05, y + 0.01, d * 0.1, w * 0.4, 0.03, d * 0.3, rng() < 0.5 ? M.rugRed : M.rugBlue, false);
+            part(-w / 2 + t + 0.3, y, -d * 0.02, 0.55, 1.0, 1.2, M.wood, false);
+            for (let k = 0; k < 3; k++) part(-w / 2 + t + 0.58, y + 0.2 + k * 0.3, -d * 0.02, 0.02, 0.05, 0.9, M.gold, false);
+            part(w * 0.05, y + 1.7, -d / 2 + t + 0.03, 1.0, 0.7, 0.05, M.woodDark, false);
+            part(w * 0.05, y + 1.75, -d / 2 + t + 0.06, 0.8, 0.5, 0.03, [M.blue, M.mint, M.yellow, M.pink][Math.floor(rng() * 4)], false);
         }
         const doorOut = toWorld(0, d / 2 + 1.6);
         const doorIn = toWorld(0, d / 2 - 1.1);
@@ -1736,6 +1817,7 @@ export function createWorld(scene, models, opts = {}) {
             }
             return null;
         },
+        houses,
         chestSpots,
         floorSpots,
         ammoSpots,

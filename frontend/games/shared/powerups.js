@@ -4,6 +4,7 @@
  * the corner of the screen. Icons are drawn on a canvas, so no image files.
  */
 import * as THREE from 'three';
+import { drawIcon } from './icons.js';
 
 export const POWERUPS = {
     shoes: { label: 'נעלי קפיצה', color: '#22c55e', seconds: 10 },
@@ -14,110 +15,8 @@ export const POWERUPS = {
     jetpack: { label: 'רקטה', color: '#f97316', seconds: 5 },
 };
 
-function drawIcon(ctx, kind, s) {
-    const c = s / 2;
-    ctx.fillStyle = '#fff';
-    ctx.strokeStyle = '#fff';
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    if (kind === 'shoes') {
-        // sneaker with a wing of speed lines
-        ctx.beginPath();
-        ctx.moveTo(s * 0.18, s * 0.66);
-        ctx.lineTo(s * 0.18, s * 0.42);
-        ctx.quadraticCurveTo(s * 0.2, s * 0.32, s * 0.32, s * 0.33);
-        ctx.lineTo(s * 0.44, s * 0.36);
-        ctx.quadraticCurveTo(s * 0.52, s * 0.52, s * 0.7, s * 0.52);
-        ctx.quadraticCurveTo(s * 0.84, s * 0.54, s * 0.84, s * 0.66);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillRect(s * 0.16, s * 0.68, s * 0.7, s * 0.07);
-        ctx.lineWidth = s * 0.05;
-        [[0.42, 0.18], [0.56, 0.24], [0.7, 0.32]].forEach(([x, y]) => {
-            ctx.beginPath();
-            ctx.moveTo(s * x, s * (y + 0.1));
-            ctx.lineTo(s * x, s * y);
-            ctx.stroke();
-        });
-    } else if (kind === 'magnet') {
-        ctx.lineWidth = s * 0.16;
-        ctx.beginPath();
-        ctx.arc(c, s * 0.45, s * 0.22, Math.PI, 0, true);
-        ctx.stroke();
-        ctx.lineCap = 'butt';
-        ctx.beginPath();
-        ctx.moveTo(c - s * 0.22, s * 0.45);
-        ctx.lineTo(c - s * 0.22, s * 0.22);
-        ctx.moveTo(c + s * 0.22, s * 0.45);
-        ctx.lineTo(c + s * 0.22, s * 0.22);
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-        ctx.beginPath();
-        ctx.moveTo(c - s * 0.22, s * 0.3);
-        ctx.lineTo(c - s * 0.22, s * 0.22);
-        ctx.moveTo(c + s * 0.22, s * 0.3);
-        ctx.lineTo(c + s * 0.22, s * 0.22);
-        ctx.stroke();
-    } else if (kind === 'x2') {
-        ctx.font = `900 ${Math.round(s * 0.42)}px system-ui, Arial, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('x2', c, c + s * 0.02);
-    } else if (kind === 'double') {
-        ctx.lineWidth = s * 0.1;
-        [0.62, 0.4].forEach((y) => {
-            ctx.beginPath();
-            ctx.moveTo(c - s * 0.2, s * y + s * 0.08);
-            ctx.lineTo(c, s * y - s * 0.1);
-            ctx.lineTo(c + s * 0.2, s * y + s * 0.08);
-            ctx.stroke();
-        });
-    } else if (kind === 'jetpack') {
-        // a little rocket with a flame
-        ctx.save();
-        ctx.translate(c, c);
-        ctx.rotate(-Math.PI / 4);
-        ctx.beginPath();
-        ctx.moveTo(0, -s * 0.34);
-        ctx.quadraticCurveTo(s * 0.13, -s * 0.2, s * 0.12, s * 0.12);
-        ctx.lineTo(-s * 0.12, s * 0.12);
-        ctx.quadraticCurveTo(-s * 0.13, -s * 0.2, 0, -s * 0.34);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(s * 0.12, s * 0.02);
-        ctx.lineTo(s * 0.22, s * 0.18);
-        ctx.lineTo(s * 0.12, s * 0.14);
-        ctx.moveTo(-s * 0.12, s * 0.02);
-        ctx.lineTo(-s * 0.22, s * 0.18);
-        ctx.lineTo(-s * 0.12, s * 0.14);
-        ctx.fill();
-        ctx.fillStyle = '#fde047';
-        ctx.beginPath();
-        ctx.moveTo(-s * 0.07, s * 0.15);
-        ctx.quadraticCurveTo(0, s * 0.42, s * 0.07, s * 0.15);
-        ctx.fill();
-        ctx.fillStyle = POWERUPS.jetpack.color;
-        ctx.beginPath();
-        ctx.arc(0, -s * 0.12, s * 0.05, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    } else if (kind === 'shield') {
-        ctx.beginPath();
-        ctx.moveTo(c, s * 0.18);
-        ctx.lineTo(s * 0.76, s * 0.28);
-        ctx.quadraticCurveTo(s * 0.76, s * 0.66, c, s * 0.84);
-        ctx.quadraticCurveTo(s * 0.24, s * 0.66, s * 0.24, s * 0.28);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = POWERUPS.shield.color;
-        ctx.beginPath();
-        ctx.moveTo(c, s * 0.3);
-        ctx.lineTo(s * 0.64, s * 0.36);
-        ctx.quadraticCurveTo(s * 0.64, s * 0.6, c, s * 0.72);
-        ctx.closePath();
-        ctx.fill();
-    }
-}
+// which picture from the shared icon set (shared/icons.js) each power-up uses
+const ICON_OF = { shoes: 'shoes', magnet: 'magnet', x2: 'coins2', double: 'double', shield: 'shield', jetpack: 'rocket' };
 
 const iconCache = {};
 
@@ -131,29 +30,34 @@ export function iconCanvas(kind, size = 128) {
     const ctx = canvas.getContext('2d');
     const c = size / 2;
     const def = POWERUPS[kind];
-    const g = ctx.createRadialGradient(c * 0.8, c * 0.7, size * 0.05, c, c, c);
-    g.addColorStop(0, '#ffffff');
-    g.addColorStop(0.18, def.color);
-    g.addColorStop(1, shade(def.color, -0.35));
-    ctx.fillStyle = g;
+    // a coloured rim around a dark disc, so every picture stands out
+    const rim = ctx.createLinearGradient(0, 0, 0, size);
+    rim.addColorStop(0, shade(def.color, 0.35));
+    rim.addColorStop(1, shade(def.color, -0.3));
+    ctx.fillStyle = rim;
     ctx.beginPath();
-    ctx.arc(c, c, c * 0.94, 0, Math.PI * 2);
+    ctx.arc(c, c, c * 0.96, 0, Math.PI * 2);
     ctx.fill();
-    ctx.lineWidth = size * 0.05;
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.stroke();
-    ctx.save();
-    ctx.translate(size * 0.1, size * 0.1);
-    ctx.scale(0.8, 0.8);
-    drawIcon(ctx, kind, size);
-    ctx.restore();
+    const inner = ctx.createRadialGradient(c, c * 0.7, size * 0.05, c, c, c * 0.8);
+    inner.addColorStop(0, '#334155');
+    inner.addColorStop(1, '#0b1120');
+    ctx.fillStyle = inner;
+    ctx.beginPath();
+    ctx.arc(c, c, c * 0.78, 0, Math.PI * 2);
+    ctx.fill();
+    // a soft shine on top
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.beginPath();
+    ctx.ellipse(c, c * 0.55, c * 0.55, c * 0.28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    drawIcon(ctx, ICON_OF[kind] || 'star', size * 0.2, size * 0.2, size * 0.6);
     iconCache[key] = canvas;
     return canvas;
 }
 
 function shade(hex, amount) {
     const n = parseInt(hex.slice(1), 16);
-    const f = (v) => Math.max(0, Math.min(255, Math.round(v + v * amount)));
+    const f = (v) => Math.max(0, Math.min(255, Math.round(amount > 0 ? v + (255 - v) * amount : v + v * amount)));
     return `rgb(${f(n >> 16)}, ${f((n >> 8) & 255)}, ${f(n & 255)})`;
 }
 
@@ -265,4 +169,33 @@ export function createPowerupHud(parent) {
             Object.keys(items).forEach((k) => this.remove(k));
         },
     };
+}
+
+/** A list on the start screen: each power-up's badge, its name and what it does. */
+export function renderPowerLegend(el, list) {
+    if (!el) return;
+    el.innerHTML = '';
+    el.classList.add('pu-legend');
+    const style = document.createElement('style');
+    style.textContent = `
+        .pu-legend { list-style:none; display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; padding-top:6px; }
+        .pu-legend .pu-row { display:flex; align-items:center; gap:7px; text-align:right; line-height:1.25; }
+        .pu-legend canvas { width:30px; height:30px; flex:none; }
+        .pu-legend b { display:block; font-size:12.5px; }
+        .pu-legend small { display:block; font-size:11px; opacity:.8; }
+        @media (max-width:520px) { .pu-legend { grid-template-columns:1fr; } }
+    `;
+    el.appendChild(style);
+    for (const [kind, text] of list) {
+        const row = document.createElement('div');
+        row.className = 'pu-row';
+        const c = document.createElement('canvas');
+        c.width = 60;
+        c.height = 60;
+        c.getContext('2d').drawImage(iconCanvas(kind), 0, 0, 60, 60);
+        const t = document.createElement('div');
+        t.innerHTML = `<b style="color:${POWERUPS[kind].color}">${POWERUPS[kind].label}</b><small>${text}</small>`;
+        row.append(c, t);
+        el.appendChild(row);
+    }
 }

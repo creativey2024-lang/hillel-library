@@ -37,14 +37,8 @@ export const PORTALS = [
     { x: -60, z: 0, name: 'מערב' },
 ];
 
-// shops inside the dome (E to use them, paid with this match's points)
-export const STATIONS = [
-    { id: 'crate', x: 9.5, z: 9.5, name: 'תיבת נשק', price: 450, color: 0x60a5fa, desc: 'נשק אקראי' },
-    { id: 'gold', x: -9.5, z: 9.5, name: 'תיבת זהב', price: 1400, color: 0xfacc15, desc: 'נשק אפי / אגדי / מיוחד' },
-    { id: 'ammo', x: 9.5, z: -9.5, name: 'תחמושת', price: 180, color: 0x4ade80, desc: 'מילוי תחמושת ורימונים' },
-    { id: 'heal', x: -9.5, z: -9.5, name: 'מעיין ריפוי', price: 220, color: 0xf472b6, desc: 'חיים ומגן מלאים' },
-    { id: 'book', x: 0, z: -4.2, name: 'חיזוק הספר', price: 900, color: 0xfbbf24, desc: '+250 לחיי הספר' },
-];
+// (no shops any more: weapons get better with kills - see main.js)
+export const STATIONS = [];
 
 export const PLAYER_SPAWNS = [[0, 12], [3, 12], [-3, 12], [0, 14.5]];
 
@@ -724,6 +718,49 @@ export function createLibrary(scene, { quality = 1 } = {}) {
         shield.position.y = 2.1;
         ground.add(shield);
         Object.assign(book, { group: g, ring1, floorRunes, glow, shield, shieldMat, hit: 0 });
+    }
+
+    // ------------------------------------------------------------------ four golden globes in the dome
+    const globes = [];
+    {
+        const brass = new THREE.MeshStandardMaterial({ color: 0xc8971e, metalness: 0.85, roughness: 0.28 });
+        const sea = new THREE.MeshStandardMaterial({ color: 0x1e4f8a, roughness: 0.4, metalness: 0.2, emissive: 0x0a1f3d, emissiveIntensity: 0.6 });
+        for (const [x, z] of [[9.5, 9.5], [-9.5, 9.5], [9.5, -9.5], [-9.5, -9.5]]) {
+            const g = new THREE.Group();
+            g.position.set(x, 0, z);
+            const base = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.75, 1.1, 16), M.pillar);
+            base.position.y = 0.55;
+            const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.1, 16), brass);
+            cap.position.y = 1.15;
+            const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.5, 8), brass);
+            stem.position.y = 1.4;
+            const spin = new THREE.Group();
+            spin.position.y = 2.05;
+            spin.rotation.z = 0.4;
+            const ball = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 16), sea);
+            spin.add(ball);
+            // continents (bumps) and the rings around it
+            for (let k = 0; k < 7; k++) {
+                const land = new THREE.Mesh(new THREE.SphereGeometry(0.16 + (k % 3) * 0.05, 8, 6), new THREE.MeshStandardMaterial({ color: 0x4d7c0f, roughness: 0.7 }));
+                const a = k * 2.4;
+                const b = (k * 1.7) % 3 - 1.2;
+                land.position.set(Math.cos(a) * Math.cos(b) * 0.36, Math.sin(b) * 0.36, Math.sin(a) * Math.cos(b) * 0.36);
+                land.scale.set(1, 0.45, 1);
+                land.lookAt(0, 0, 0);
+                spin.add(land);
+            }
+            for (const [rx, ry] of [[Math.PI / 2, 0], [0, 0], [0, Math.PI / 2]]) {
+                const ring = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.02, 6, 40), brass);
+                ring.rotation.set(rx, ry, 0);
+                spin.add(ring);
+            }
+            g.add(base, cap, stem, spin);
+            g.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+            ground.add(g);
+            cyl(x, z, 0.75, 0, 1.2);
+            globes.push(spin);
+        }
+        animated.push({ update(t) { globes.forEach((sp, i) => { sp.rotation.y = t * 0.3 + i; }); } });
     }
 
     // ------------------------------------------------------------------ the shops

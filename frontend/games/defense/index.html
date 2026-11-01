@@ -24,7 +24,7 @@
         <div class="df-top">
             <div class="df-wave"><span id="waveLabel">גל 1</span><small id="waveSub">מתכוננים...</small></div>
             <div class="df-book">
-                <span class="df-book-ico" aria-hidden="true"></span>
+                <i class="df-book-ico" data-icon="book" data-size="30"></i>
                 <div class="df-book-bar"><div id="bookFill"></div><div id="bookHit"></div></div>
                 <b id="bookText">1500</b>
             </div>
@@ -48,10 +48,18 @@
         <div id="progress" class="progress hidden"><div class="progress-bar"><div id="progressFill"></div></div><span id="progressText"></span></div>
         <div id="downScreen" class="df-down hidden"><b>נפלת!</b><span id="downText">חבר יכול להקים אותך · חוזר בעוד 10</span></div>
 
+        <div class="df-up" title="כל 10 חיסולים הנשק שביד משתדרג, וכל 30 - נשק חדש">
+            <i data-icon="upgrade" data-size="34"></i>
+            <div class="df-up-body">
+                <div class="df-up-head"><b>שדרוג הבא</b><span id="upCount">עוד 10 חיסולים</span></div>
+                <div class="df-up-bar"><div id="upFill"></div></div>
+                <small id="upNext"></small>
+            </div>
+        </div>
         <div class="df-wallet">
-            <span title="נקודות לקניות בחנויות"><i class="i-star"></i><b id="pointsText">0</b></span>
-            <span title="מטבעות לחשבון"><i class="i-coin"></i><b id="coinText">0</b></span>
-            <span title="רימונים (G)"><i class="i-nade"></i><b id="nadeText">2</b></span>
+            <span title="מפלצות שחיסלת"><i data-icon="skull" data-size="17"></i><b id="killText">0</b></span>
+            <span title="מטבעות לחשבון"><i data-icon="coin" data-size="17"></i><b id="coinText">0</b></span>
+            <span title="רימונים (G)"><i data-icon="grenade" data-size="17"></i><b id="nadeText">2</b></span>
         </div>
 
         <div class="bottom-center">
@@ -159,13 +167,14 @@
                     <div><kbd>לחיצה</kbd><span>ירי</span></div>
                     <div><kbd>לחיצה ימנית</kbd><span>כוונת</span></div>
                     <div><kbd>רווח</kbd><span>קפיצה</span></div>
-                    <div><kbd>E</kbd><span>חנות / איסוף / הקמת חבר</span></div>
+                    <div><kbd>E</kbd><span>איסוף נשק / הקמת חבר</span></div>
                     <div><kbd>G</kbd><span>רימון</span></div>
                     <div><kbd dir="ltr">1–5</kbd><span>בחירת נשק</span></div>
                     <div><kbd>R</kbd><span>טעינה</span></div>
                     <div><kbd>B</kbd><span>הגל הבא עכשיו (בהפסקה)</span></div>
                 </div>
-                <p class="lb-tip">על כל מפלצת מקבלים <b>נקודות</b> - קונים בהן נשקים, תחמושת וריפוי בחנויות שבתוך הכיפה.</p>
+                <p class="lb-tip"><b>שדרוגים:</b> כל 10 חיסולים הנשק שביד שלך משתדרג בדרגה (רגיל ← לא נפוץ ← נדיר ← אפי ← אגדי), וכל 30 חיסולים מקבלים נשק חדש. מפלצת מוזהבת שווה 3 חיסולים, טיטאן - 10.</p>
+                <p class="lb-tip"><b>בסוף כל גל:</b> חצי תחמושת, רימון, וחיים מלאים. מפלצות מפילות גם קופסאות תחמושת, ריפוי ונשקים.</p>
                 <p class="lb-tip">נשקים מיוחדים: מטול רקטות, רובה קרח (מאט), מקל ברקים (קופץ בין מפלצות) ומיניגאן.</p>
                 <p class="lb-tip">כל 5 גלים מגיע טיטאן הדיו. מגדלי ספרים ליד המדפים - אפשר לטפס ולירות מלמעלה!</p>
             </div>

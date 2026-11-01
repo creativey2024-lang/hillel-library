@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import { applySkin } from '../../shared/skins.js';
+import { addGear } from '../../shared/gear.js';
 
 const SPOTS = [
     new THREE.Vector3(0, 0.35, 6.0),
@@ -34,7 +35,7 @@ export function createStage({ scene, camera, gltf, labels }) {
         return { group: g, ring, ringMat, burst, burstMat, burstT: 1, member: null, model: null, mixer: null, skin: null, clips: null, inT: 1 };
     });
 
-    function makeCharacter(skinId) {
+    function makeCharacter(skinId, gearSeed) {
         const model = gltf.scene.clone(true);
         model.scale.setScalar(1.6);
         model.traverse((c) => {
@@ -43,6 +44,7 @@ export function createStage({ scene, camera, gltf, labels }) {
                 c.castShadow = true;
             }
         });
+        addGear(model, { seed: gearSeed });
         const mixer = new THREE.AnimationMixer(model);
         const clips = Object.fromEntries(gltf.animations.map((a) => [a.name, a]));
         if (clips.idle) mixer.clipAction(clips.idle).play();
@@ -63,7 +65,7 @@ export function createStage({ scene, camera, gltf, labels }) {
                 s.mixer = null;
                 s.skin = null;
                 if (m) {
-                    const c = makeCharacter(m.skin);
+                    const c = makeCharacter(m.skin, m.me ? (m.name === 'את/ה' ? 'me' : m.name) : m.name);
                     s.group.add(c.model);
                     Object.assign(s, c);
                     s.inT = 0;

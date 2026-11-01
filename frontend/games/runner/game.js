@@ -20,11 +20,15 @@
 import * as THREE from 'three';
 import { GLTFLoader } from '../shared/lib/loaders/GLTFLoader.js';
 import { applySkin, skinFromUrl } from '../shared/skins.js';
-import { POWERUPS, createPowerupMesh, createPowerupHud } from '../shared/powerups.js';
+import { POWERUPS, createPowerupMesh, createPowerupHud, renderPowerLegend } from '../shared/powerups.js';
+import { fillIcons } from '../shared/icons.js';
+import { addGear } from '../shared/gear.js';
 import * as bridgeLib from '../shared/bridge.js';
 import { createCoinFx } from '../shared/coinfx.js';
 
-window.__gameBooted = true; // (all the game's files loaded - see index.html)
+window.__gameBooted = true;
+fillIcons();
+renderPowerLegend(document.getElementById('powerLegend'), [['shoes', 'קופצים גבוה - מעל משאיות ועל רכבות'], ['magnet', 'מושך אליך את כל המטבעות'], ['x2', 'כל מטבע שווה 2']]); // (all the game's files loaded - see index.html)
 
 // (read through the module object, so an older copy of bridge.js on the server
 // can't stop the whole game from starting)
@@ -41,9 +45,11 @@ const ROAD_WIDTH = 8.6;
 const SEGMENT_COUNT = 34;         // street segments kept alive (~92 units of street)
 const VIEW_DISTANCE = SEGMENT_COUNT * TILE;
 
-const START_SPEED = 15;           // units / second
-const MAX_SPEED = 38;
-const SPEED_TIME = 75;            // seconds: the street keeps speeding up, quickly at first
+// Starts at an easy pace, then speeds up more and more: after about two
+// minutes it's really fast.
+const START_SPEED = 11;           // units / second
+const MAX_SPEED = 40;
+const SPEED_TIME = 120;           // seconds to reach top speed
 
 // Jumps use real gravity so you can land on train roofs. Normal jumps clear
 // barriers; with the super-jump shoes you can jump over trucks and up onto trains.
@@ -464,6 +470,7 @@ const player = {
 function buildPlayer() {
     player.root = new THREE.Group();
     const model = cloneModel('character', CHARACTER_SCALE);
+    addGear(model, { seed: 'me' }); // a backpack, a cap, shoes...
     model.rotation.y = Math.PI; // the model faces the camera; turn it to run into the street
     player.model = model;
     player.root.add(model);
@@ -790,6 +797,12 @@ function resetGame() {
     updateHud();
 }
 
+// 0 at the start, 1 at top speed: gentle at first, then faster and faster, then levels off
+function speedCurve(k) {
+    const x = Math.min(1, Math.max(0, k));
+    return x * x * (3 - 2 * x);
+}
+
 function rowGap() {
     // Gap scales with speed so there's always ~1 second to react, and slowly
     // tightens as the run goes on (Boxy Run's difficulty levels, smoothed out).
@@ -983,7 +996,7 @@ function update(dt) {
 
     if (running) {
         state.elapsed += dt;
-        state.speed = START_SPEED + (MAX_SPEED - START_SPEED) * (1 - Math.exp(-state.elapsed / SPEED_TIME));
+        state.speed = START_SPEED + (MAX_SPEED - START_SPEED) * speedCurve(state.elapsed / SPEED_TIME);
         const move = state.speed * dt;
         state.distance += move;
         state.score = Math.floor(state.distance) + state.coins * 10;
@@ -1078,6 +1091,12 @@ function update(dt) {
         coinFx.update(dt, null);
     }
     ui.coins.parentElement.classList.toggle('double', Boolean(powers.x2));
+    // x2: the coin counter shows two coins with "x2"
+    const coinIcon = ui.coins.parentElement.querySelector('[data-icon]');
+    if (coinIcon) {
+        coinIcon.dataset.icon = powers.x2 ? 'coins2' : 'coin';
+        fillIcons(ui.coins.parentElement);
+    }
 
     clouds.forEach((c) => {
         c.position.z += (running ? state.speed * 0.25 : 0.6) * dt;

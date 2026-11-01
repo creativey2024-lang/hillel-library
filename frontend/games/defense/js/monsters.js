@@ -9,7 +9,7 @@
  * them (createMonsterView) from the leader's updates.
  */
 import * as THREE from 'three';
-import { glowTexture } from './paint.js';
+import { glowTexture, runeTexture } from './paint.js';
 import { BOOK_POS, BOOK_RADIUS, PORTALS } from './library.js';
 
 // ---------------------------------------------------------------- the kinds
@@ -59,6 +59,11 @@ const BUILD = {
             const e = mesh(new THREE.SphereGeometry(0.13, 10, 8), eyeW, blob, s * 0.2, 0.12, 0.52);
             mesh(new THREE.SphereGeometry(0.065, 8, 6), pupil, e, 0, 0, 0.09);
         }
+        const mouth = mesh(new THREE.SphereGeometry(0.15, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), glowMat(0x0b0420), blob, 0, -0.12, 0.5);
+        mouth.scale.set(1.3, 0.8, 0.5);
+        mesh(new THREE.SphereGeometry(0.06, 8, 6), mat(0xe11d48), blob, 0.03, -0.2, 0.52).scale.set(1.2, 0.6, 1);
+        // bubbles floating inside the ink
+        for (let i = 0; i < 3; i++) mesh(new THREE.SphereGeometry(0.05 + i * 0.02, 8, 6), new THREE.MeshBasicMaterial({ color: 0x818cf8, transparent: true, opacity: 0.5 }), blob, 0.25 - i * 0.2, 0.3 - i * 0.12, 0.35).castShadow = false;
         const glow = eyeSprite(0x67e8f9, 0.9);
         glow.position.set(0, 0.7, 0.5);
         body.add(glow);
@@ -121,107 +126,220 @@ const BUILD = {
 
     goblin(elite) {
         const body = new THREE.Group();
-        const skin = mat(elite ? 0xc9a227 : 0x6b8e5a, { roughness: 0.8 });
-        const cloth = mat(0x4a3424, { roughness: 0.9 });
-        const torso = mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.6, 10), cloth, body, 0, 0.72, 0);
-        const head = mesh(new THREE.SphereGeometry(0.3, 14, 10), skin, body, 0, 1.18, 0.02);
+        const skin = mat(elite ? 0xc9a227 : 0x6f9a4f, { roughness: 0.75 });
+        const skinDark = mat(elite ? 0x9a7a10 : 0x4d7a35, { roughness: 0.8 });
+        const leather = mat(0x6b4226, { roughness: 0.85 });
+        const cloth = mat(0x3f3a52, { roughness: 0.95 });
+        const metal = mat(0xb8c2cc, { metalness: 0.8, roughness: 0.3 });
+        const gold = mat(0xd4a017, { metalness: 0.8, roughness: 0.3 });
+        const bone = mat(0xf5f0e1, { roughness: 0.5 });
+        const black = glowMat(0x111111);
+        const hip = new THREE.Group();
+        hip.position.y = 0.62;
+        body.add(hip);
+        // hunched body: leather tunic, belt with a gold buckle, a shoulder pad
+        const torso = new THREE.Group();
+        hip.add(torso);
+        torso.rotation.x = 0.28;
+        mesh(new THREE.CylinderGeometry(0.27, 0.33, 0.55, 12), leather, torso, 0, 0.27, 0);
+        mesh(new THREE.SphereGeometry(0.27, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), leather, torso, 0, 0.53, 0).scale.set(1, 0.6, 0.9);
+        const belt = mesh(new THREE.TorusGeometry(0.31, 0.04, 6, 18), mat(0x3b2412), torso, 0, 0.06, 0);
+        belt.rotation.x = Math.PI / 2;
+        mesh(new THREE.BoxGeometry(0.11, 0.09, 0.04), gold, torso, 0, 0.06, 0.32);
+        mesh(new THREE.SphereGeometry(0.17, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), metal, torso, -0.3, 0.5, 0).rotation.z = 0.5;
+        // a little sack on the back
+        mesh(new THREE.SphereGeometry(0.17, 10, 8), mat(0x9a7b4f, { roughness: 1 }), torso, 0, 0.32, -0.3).scale.set(1, 1.1, 0.8);
+        // head
+        const head = new THREE.Group();
+        head.position.set(0, 0.68, 0.12);
+        torso.add(head);
+        mesh(new THREE.SphereGeometry(0.29, 16, 12), skin, head).scale.set(1.1, 0.95, 1);
+        mesh(new THREE.BoxGeometry(0.42, 0.07, 0.1), skinDark, head, 0, 0.09, 0.22).rotation.x = -0.3; // brow
+        mesh(new THREE.ConeGeometry(0.07, 0.24, 8), skin, head, 0, 0.0, 0.33).rotation.x = Math.PI / 2 + 0.25; // nose
+        mesh(new THREE.BoxGeometry(0.22, 0.05, 0.05), black, head, 0, -0.13, 0.25); // mouth
         for (const s of [-1, 1]) {
-            const ear = mesh(new THREE.ConeGeometry(0.1, 0.42, 6), skin, head, s * 0.32, 0.08, 0);
-            ear.rotation.z = -s * 1.2;
-            const e = eyeSprite(0xfde047, 0.26);
-            e.position.set(s * 0.11, 0.04, 0.27);
+            mesh(new THREE.ConeGeometry(0.025, 0.09, 5), bone, head, s * 0.07, -0.09, 0.27);
+            const eye = mesh(new THREE.SphereGeometry(0.06, 10, 8), glowMat(0xfde047), head, s * 0.11, 0.03, 0.25);
+            mesh(new THREE.BoxGeometry(0.018, 0.08, 0.02), black, eye, 0, 0, 0.05);
+            const ear = new THREE.Group();
+            ear.position.set(s * 0.3, 0.05, 0);
+            ear.rotation.z = -s * 1.25;
+            head.add(ear);
+            mesh(new THREE.ConeGeometry(0.1, 0.48, 6), skin, ear, 0, 0.2, 0);
+            mesh(new THREE.ConeGeometry(0.055, 0.34, 6), mat(0xd98a8a), ear, 0, 0.17, 0.04);
+            const e = eyeSprite(0xfde047, 0.2);
+            e.position.set(s * 0.11, 0.03, 0.3);
             head.add(e);
         }
-        mesh(new THREE.ConeGeometry(0.07, 0.2, 6), skin, head, 0, -0.04, 0.32).rotation.x = Math.PI / 2;
+        // a leather cap
+        mesh(new THREE.SphereGeometry(0.3, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2.4), leather, head, 0, 0.06, -0.02).scale.set(1.08, 0.85, 1.05);
+        // arms and legs (thigh + shin + foot)
         const limbs = [];
         for (const s of [-1, 1]) {
             const arm = new THREE.Group();
-            arm.position.set(s * 0.36, 0.95, 0);
-            body.add(arm);
-            mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.55, 6), skin, arm, 0, -0.26, 0);
+            arm.position.set(s * 0.34, 0.45, 0.02);
+            torso.add(arm);
+            mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.3, 8), skin, arm, 0, -0.15, 0);
+            const fore = new THREE.Group();
+            fore.position.y = -0.3;
+            fore.rotation.x = -0.5;
+            arm.add(fore);
+            mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.28, 8), skin, fore, 0, -0.14, 0);
+            mesh(new THREE.BoxGeometry(0.1, 0.06, 0.12), leather, fore, 0, -0.06, 0); // bracer
+            mesh(new THREE.SphereGeometry(0.075, 8, 6), skinDark, fore, 0, -0.3, 0);
             const leg = new THREE.Group();
-            leg.position.set(s * 0.15, 0.45, 0);
-            body.add(leg);
-            mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.45, 6), cloth, leg, 0, -0.22, 0);
-            limbs.push({ arm, leg, s });
+            leg.position.set(s * 0.15, 0, 0);
+            hip.add(leg);
+            mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.3, 8), cloth, leg, 0, -0.15, 0);
+            mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.28, 8), skin, leg, 0, -0.42, 0);
+            mesh(new THREE.BoxGeometry(0.13, 0.07, 0.24), skinDark, leg, 0, -0.57, 0.05);
+            limbs.push({ arm, fore, leg, s });
         }
-        // a little dagger
-        mesh(new THREE.BoxGeometry(0.04, 0.04, 0.4), mat(0xcbd5e1, { metalness: 0.8, roughness: 0.2 }), limbs[1].arm, 0, -0.52, 0.18);
+        // a dagger: handle, guard, blade
+        const dag = new THREE.Group();
+        dag.position.set(0, -0.32, 0.06);
+        dag.rotation.x = Math.PI / 2;
+        limbs[1].fore.add(dag);
+        mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.12, 6), mat(0x3b2412), dag, 0, 0, 0);
+        mesh(new THREE.BoxGeometry(0.14, 0.025, 0.04), gold, dag, 0, 0.07, 0);
+        mesh(new THREE.BoxGeometry(0.05, 0.3, 0.015), metal, dag, 0, 0.23, 0);
         return {
             body,
-            mats: [skin],
+            mats: [skin, skinDark],
             anim(t, dt, m) {
                 const sp = Math.min(1.3, m.speedNow / 3);
-                const w = Math.sin(t * 13 + m.phase) * 0.8 * sp;
+                const ph = t * 13 + m.phase;
+                const w = Math.sin(ph) * 0.8 * sp;
                 limbs.forEach(({ arm, leg, s }) => {
-                    arm.rotation.x = w * s;
+                    arm.rotation.x = w * s * 0.8;
                     leg.rotation.x = -w * s;
                 });
-                if (m.attackT > 0) limbs[1].arm.rotation.x = -1.8 + m.attackT * 3;
-                body.position.y = Math.abs(Math.sin(t * 13 + m.phase)) * 0.06 * sp;
-                torso.rotation.x = 0.15 * sp;
+                if (m.attackT > 0) {
+                    limbs[1].arm.rotation.x = -2.2 + m.attackT * 4;
+                    limbs[1].fore.rotation.x = -0.2;
+                } else limbs[1].fore.rotation.x = -0.5;
+                hip.position.y = 0.62 + Math.abs(Math.sin(ph)) * 0.06 * sp;
+                torso.rotation.x = 0.28 + 0.12 * sp;
+                head.rotation.y = Math.sin(t * 2 + m.phase) * 0.25;
             },
         };
     },
 
     archer(elite) {
         const body = new THREE.Group();
-        const bone = mat(elite ? 0xfacc15 : 0xe7e2d3, { roughness: 0.6 });
-        const dark = mat(0x1f2937);
-        const skull = mesh(new THREE.SphereGeometry(0.24, 14, 10), bone, body, 0, 1.72, 0);
-        mesh(new THREE.BoxGeometry(0.26, 0.1, 0.2), bone, skull, 0, -0.2, 0.04);
+        const bone = mat(elite ? 0xfacc15 : 0xe9e3d0, { roughness: 0.6 });
+        const boneDark = mat(elite ? 0xb08d1a : 0xb9b29c, { roughness: 0.7 });
+        const hole = glowMat(0x050507);
+        const cloak = mat(0x2a1f3d, { roughness: 1, side: THREE.DoubleSide });
+        const wood = mat(0x5b3a1f, { roughness: 0.7 });
+        const bar = (len, r, parent, x, y, z) => mesh(new THREE.CylinderGeometry(r, r * 0.85, len, 6), bone, parent, x, y, z);
+        const joint = (parent, x, y, z, r = 0.045) => mesh(new THREE.SphereGeometry(r, 8, 6), boneDark, parent, x, y, z);
+        // skull: cranium, eye sockets with blue fire, nose, jaw with teeth
+        const skull = new THREE.Group();
+        skull.position.set(0, 1.72, 0.02);
+        body.add(skull);
+        mesh(new THREE.SphereGeometry(0.2, 16, 12), bone, skull).scale.set(1, 1.05, 1.1);
+        mesh(new THREE.BoxGeometry(0.26, 0.12, 0.2), bone, skull, 0, -0.1, 0.06);
         for (const s of [-1, 1]) {
-            mesh(new THREE.SphereGeometry(0.06, 8, 6), dark, skull, s * 0.09, 0.02, 0.2);
-            const e = eyeSprite(0x22d3ee, 0.22);
-            e.position.set(s * 0.09, 0.02, 0.24);
+            mesh(new THREE.SphereGeometry(0.058, 8, 6), hole, skull, s * 0.075, 0.0, 0.17);
+            const e = eyeSprite(0x22d3ee, 0.2);
+            e.position.set(s * 0.075, 0, 0.23);
             skull.add(e);
         }
-        mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.75, 6), bone, body, 0, 1.15, 0);
+        mesh(new THREE.ConeGeometry(0.025, 0.05, 3), hole, skull, 0, -0.07, 0.21).rotation.x = Math.PI;
+        const jaw = new THREE.Group();
+        jaw.position.set(0, -0.15, 0.04);
+        skull.add(jaw);
+        mesh(new THREE.BoxGeometry(0.2, 0.05, 0.16), bone, jaw, 0, -0.02, 0.04);
+        for (let k = -2; k <= 2; k++) mesh(new THREE.BoxGeometry(0.022, 0.035, 0.02), bone, jaw, k * 0.032, 0.02, 0.13);
+        // spine, ribs, collarbones, pelvis
+        for (let k = 0; k < 6; k++) mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.07, 6), boneDark, body, 0, 0.88 + k * 0.1, -0.04);
         for (let k = 0; k < 4; k++) {
-            const r = mesh(new THREE.TorusGeometry(0.2 - k * 0.025, 0.025, 5, 14), bone, body, 0, 1.38 - k * 0.11, 0);
-            r.rotation.x = Math.PI / 2;
-            r.scale.z = 0.7;
+            const r = mesh(new THREE.TorusGeometry(0.19 - k * 0.022, 0.022, 5, 16, Math.PI * 1.5), bone, body, 0, 1.43 - k * 0.1, 0);
+            r.rotation.set(Math.PI / 2, 0, Math.PI * 0.75);
+            r.scale.z = 0.75;
         }
-        mesh(new THREE.BoxGeometry(0.36, 0.1, 0.16), bone, body, 0, 0.78, 0);
+        bar(0.36, 0.022, body, 0, 1.25, 0.15); // sternum (lying)
+        body.children[body.children.length - 1].rotation.x = 0.1;
+        mesh(new THREE.BoxGeometry(0.5, 0.04, 0.05), bone, body, 0, 1.53, 0.02);
+        const pelvis = mesh(new THREE.TorusGeometry(0.14, 0.045, 6, 14), bone, body, 0, 0.8, 0);
+        pelvis.rotation.x = Math.PI / 2.4;
+        // a ragged hood and cape
+        const hood = mesh(new THREE.SphereGeometry(0.26, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), cloak, skull, 0, 0.03, -0.03);
+        hood.scale.set(1.05, 1.1, 1.15);
+        // (a cape hanging at the back only, so the bones show in front)
+        const cape = mesh(new THREE.ConeGeometry(0.4, 1.05, 10, 1, true, Math.PI * 0.65, Math.PI * 0.7), cloak, body, 0, 1.02, -0.06);
+        // quiver on the back with arrows
+        const quiver = new THREE.Group();
+        quiver.position.set(0.12, 1.3, -0.2);
+        quiver.rotation.z = -0.35;
+        body.add(quiver);
+        mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.5, 10), mat(0x6b4226), quiver, 0, 0, 0);
+        for (let k = 0; k < 4; k++) {
+            mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.25, 4), wood, quiver, (k - 1.5) * 0.03, 0.33, (k % 2) * 0.02);
+            mesh(new THREE.BoxGeometry(0.004, 0.08, 0.04), mat(0xdc2626, { side: THREE.DoubleSide }), quiver, (k - 1.5) * 0.03, 0.42, (k % 2) * 0.02);
+        }
+        // arms (upper, two thin forearm bones, hand) and legs
         const limbs = [];
         for (const s of [-1, 1]) {
             const arm = new THREE.Group();
-            arm.position.set(s * 0.25, 1.48, 0);
+            arm.position.set(s * 0.26, 1.5, 0);
             body.add(arm);
-            mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.62, 5), bone, arm, 0, -0.3, 0);
+            joint(arm, 0, 0, 0, 0.05);
+            bar(0.32, 0.026, arm, 0, -0.16, 0);
+            const fore = new THREE.Group();
+            fore.position.y = -0.33;
+            arm.add(fore);
+            joint(fore, 0, 0, 0);
+            bar(0.3, 0.016, fore, 0.02, -0.15, 0);
+            bar(0.3, 0.016, fore, -0.02, -0.15, 0);
+            mesh(new THREE.BoxGeometry(0.07, 0.08, 0.04), bone, fore, 0, -0.33, 0);
             const leg = new THREE.Group();
-            leg.position.set(s * 0.13, 0.76, 0);
+            leg.position.set(s * 0.12, 0.8, 0);
             body.add(leg);
-            mesh(new THREE.CylinderGeometry(0.04, 0.035, 0.74, 5), bone, leg, 0, -0.37, 0);
-            limbs.push({ arm, leg, s });
+            joint(leg, 0, 0, 0, 0.05);
+            bar(0.38, 0.03, leg, 0, -0.19, 0);
+            joint(leg, 0, -0.39, 0);
+            bar(0.36, 0.022, leg, 0, -0.58, 0);
+            mesh(new THREE.BoxGeometry(0.09, 0.04, 0.17), bone, leg, 0, -0.78, 0.04);
+            limbs.push({ arm, fore, leg, s });
         }
-        // the bow
+        // the bow: wooden arc with a string, and an arrow when aiming
         const bow = new THREE.Group();
-        bow.position.set(-0.05, -0.55, 0.2);
-        limbs[0].arm.add(bow);
-        const bowM = mesh(new THREE.TorusGeometry(0.42, 0.025, 5, 16, Math.PI * 0.9), mat(0x5b3a1f), bow);
-        bowM.rotation.set(0, Math.PI / 2, Math.PI / 2 + 0.15);
-        const glow = eyeSprite(0x22d3ee, 0.5);
-        glow.position.set(0, 0, 0.1);
-        glow.visible = false;
-        bow.add(glow);
+        bow.position.set(0, -0.34, 0.04);
+        limbs[0].fore.add(bow);
+        const arc = mesh(new THREE.TorusGeometry(0.45, 0.022, 5, 18, Math.PI * 0.85), wood, bow);
+        arc.rotation.set(0, Math.PI / 2, Math.PI / 2 + Math.PI * 0.075);
+        mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.88, 3), mat(0xf5f5f4), bow, 0, 0, -0.06);
+        const arrow = new THREE.Group();
+        bow.add(arrow);
+        mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.7, 4), wood, arrow, 0, 0, 0.25).rotation.x = Math.PI / 2;
+        mesh(new THREE.ConeGeometry(0.025, 0.08, 4), glowMat(0x67e8f9), arrow, 0, 0, 0.62).rotation.x = Math.PI / 2;
+        const glow = eyeSprite(0x22d3ee, 0.45);
+        glow.position.set(0, 0, 0.62);
+        arrow.add(glow);
         return {
             body,
-            mats: [bone],
+            mats: [bone, boneDark],
             anim(t, dt, m) {
                 const sp = Math.min(1, m.speedNow / 2.5);
                 const w = Math.sin(t * 8 + m.phase) * 0.6 * sp;
-                limbs.forEach(({ arm, leg, s }) => {
-                    arm.rotation.x = w * s * 0.5;
+                limbs.forEach(({ arm, fore, leg, s }) => {
+                    arm.rotation.set(w * s * 0.5, 0, 0);
+                    fore.rotation.x = -0.2;
                     leg.rotation.x = -w * s;
                 });
                 const aiming = m.aimT > 0;
-                glow.visible = aiming;
+                arrow.visible = aiming;
                 if (aiming) {
-                    limbs[0].arm.rotation.x = -1.5;
-                    limbs[1].arm.rotation.x = -1.3;
+                    limbs[0].arm.rotation.set(-1.45, 0, -0.15);
+                    limbs[0].fore.rotation.x = 0;
+                    limbs[1].arm.rotation.set(-1.3, 0, 0.5);
+                    limbs[1].fore.rotation.x = -1.2;
                 }
+                jaw.rotation.x = 0.1 + Math.max(0, Math.sin(t * 3 + m.phase)) * 0.25;
                 skull.rotation.z = Math.sin(t * 2 + m.phase) * 0.08;
+                cape.rotation.x = -0.1 - sp * 0.15 + Math.sin(t * 5) * 0.03;
             },
         };
     },
@@ -281,71 +399,157 @@ const BUILD = {
 
     bat(elite) {
         const body = new THREE.Group();
-        const fur = mat(elite ? 0xb08d1a : 0x2e1065, { roughness: 0.8 });
-        const wingM = new THREE.MeshStandardMaterial({ color: elite ? 0xd4a017 : 0x4c1d95, side: THREE.DoubleSide, roughness: 0.7 });
-        mesh(new THREE.SphereGeometry(0.2, 10, 8), fur, body, 0, 0, 0).scale.set(1, 0.9, 1.3);
+        const fur = mat(elite ? 0xb08d1a : 0x3b1f5c, { roughness: 0.9 });
+        const furLight = mat(elite ? 0xd4b44a : 0x6b4a8e, { roughness: 0.9 });
+        const wingM = new THREE.MeshStandardMaterial({ color: elite ? 0xd4a017 : 0x5b2a86, side: THREE.DoubleSide, roughness: 0.7, transparent: true, opacity: 0.95 });
+        const finger = mat(elite ? 0x8a6a00 : 0x2a1440);
+        mesh(new THREE.SphereGeometry(0.2, 12, 10), fur, body, 0, 0, 0).scale.set(1, 0.9, 1.25);
+        mesh(new THREE.SphereGeometry(0.13, 10, 8), furLight, body, 0, -0.04, 0.12).scale.set(1, 0.9, 1);
+        const head = new THREE.Group();
+        head.position.set(0, 0.08, 0.22);
+        body.add(head);
+        mesh(new THREE.SphereGeometry(0.13, 12, 10), fur, head);
+        mesh(new THREE.SphereGeometry(0.06, 8, 6), furLight, head, 0, -0.03, 0.11).scale.set(1.2, 0.8, 1);
         for (const s of [-1, 1]) {
-            mesh(new THREE.ConeGeometry(0.06, 0.16, 4), fur, body, s * 0.1, 0.2, 0.05);
-            const e = eyeSprite(0xef4444, 0.18);
-            e.position.set(s * 0.07, 0.04, 0.22);
-            body.add(e);
+            const ear = mesh(new THREE.ConeGeometry(0.06, 0.2, 5), fur, head, s * 0.08, 0.15, -0.02);
+            ear.rotation.z = -s * 0.3;
+            mesh(new THREE.ConeGeometry(0.035, 0.14, 5), mat(0xd98ab0), ear, 0, -0.01, 0.025);
+            mesh(new THREE.ConeGeometry(0.012, 0.05, 4), mat(0xffffff), head, s * 0.025, -0.08, 0.12).rotation.x = Math.PI; // fangs
+            const e = eyeSprite(0xef4444, 0.16);
+            e.position.set(s * 0.05, 0.03, 0.12);
+            head.add(e);
+            mesh(new THREE.SphereGeometry(0.022, 6, 5), glowMat(0xff3b3b), head, s * 0.05, 0.03, 0.115);
         }
+        // wings: three finger bones each, with skin stretched between them
         const wings = [];
         for (const s of [-1, 1]) {
             const hinge = new THREE.Group();
-            hinge.position.x = s * 0.12;
+            hinge.position.x = s * 0.14;
             body.add(hinge);
+            const tips = [[s * 0.75, 0.18, 0.05], [s * 0.7, -0.02, -0.22], [s * 0.42, -0.05, -0.36]];
+            const pts = [0, 0.02, 0.1];
+            const tri = [];
+            let prev = [s * 0.05, 0, 0.12];
+            for (const tp of tips) {
+                const len = Math.hypot(tp[0], tp[1], tp[2]);
+                const b = mesh(new THREE.CylinderGeometry(0.012, 0.008, len, 4), finger, hinge);
+                b.position.set(tp[0] / 2, tp[1] / 2, tp[2] / 2);
+                b.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...tp).normalize());
+                tri.push(...pts, ...prev, ...tp);
+                prev = tp;
+            }
+            tri.push(...pts, ...prev, s * 0.05, -0.05, -0.2);
             const g = new THREE.BufferGeometry();
-            g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.15, s * 0.7, 0.1, 0.05, s * 0.55, 0, -0.25, 0, 0, 0.15, s * 0.55, 0, -0.25, 0, 0, -0.15], 3));
+            g.setAttribute('position', new THREE.Float32BufferAttribute(tri, 3));
             g.computeVertexNormals();
             mesh(g, wingM, hinge);
             wings.push({ hinge, s });
         }
+        for (const s of [-1, 1]) mesh(new THREE.ConeGeometry(0.02, 0.08, 4), finger, body, s * 0.06, -0.17, -0.12).rotation.x = Math.PI;
         return {
             body,
             mats: [fur],
             anim(t, dt, m) {
-                const f = Math.sin(t * 28 + m.phase) * 0.9;
-                wings.forEach(({ hinge, s }) => { hinge.rotation.z = s * f; });
-                body.position.y = Math.sin(t * 5 + m.phase) * 0.2;
+                const f = Math.sin(t * 26 + m.phase);
+                wings.forEach(({ hinge, s }) => {
+                    hinge.rotation.z = s * f * 0.95;
+                    hinge.rotation.y = -s * 0.15 * f;
+                });
+                body.position.y = Math.sin(t * 5 + m.phase) * 0.2 - f * 0.04;
+                head.rotation.x = m.attackT > 0 ? 0.5 : 0;
             },
         };
     },
 
     wizard(elite) {
         const body = new THREE.Group();
-        const robe = mat(elite ? 0x8a6a00 : 0x1e1033, { roughness: 0.9 });
-        const trim = mat(0xa855f7, { emissive: 0x7e22ce, emissiveIntensity: 0.8 });
-        const r = mesh(new THREE.ConeGeometry(0.62, 1.7, 14, 1, true), robe, body, 0, 1.0, 0);
-        r.material.side = THREE.DoubleSide;
-        mesh(new THREE.TorusGeometry(0.6, 0.04, 6, 20), trim, body, 0, 0.18, 0).rotation.x = Math.PI / 2;
-        const hood = mesh(new THREE.ConeGeometry(0.32, 0.7, 12), robe, body, 0, 2.0, 0);
-        const face = mesh(new THREE.SphereGeometry(0.22, 12, 8), glowMat(0x050208), body, 0, 1.78, 0.08);
-        face.castShadow = false;
+        const robe = mat(elite ? 0x8a6a00 : 0x241338, { roughness: 0.95, side: THREE.DoubleSide });
+        const robeDark = mat(elite ? 0x5a4500 : 0x150a24, { roughness: 1, side: THREE.DoubleSide });
+        const trim = mat(0xd4a017, { metalness: 0.7, roughness: 0.35, emissive: 0x3a2400, emissiveIntensity: 0.5 });
+        const magic = glowMat(0xd8b4fe);
+        // a flowing robe (turned profile) with a gold hem
+        const prof = [[0.01, 0], [0.62, 0], [0.55, 0.3], [0.42, 0.8], [0.32, 1.25], [0.3, 1.5], [0.2, 1.62], [0.01, 1.66]].map(([x, y]) => new THREE.Vector2(x, y));
+        const robeM = mesh(new THREE.LatheGeometry(prof, 18), robe, body, 0, 0.12, 0);
+        const hem = mesh(new THREE.TorusGeometry(0.6, 0.035, 6, 30), trim, body, 0, 0.14, 0);
+        hem.rotation.x = Math.PI / 2;
+        // the front opening: a darker stripe with buttons
+        mesh(new THREE.BoxGeometry(0.16, 1.1, 0.02), robeDark, body, 0, 0.75, 0.47).rotation.x = -0.18;
+        for (let k = 0; k < 3; k++) mesh(new THREE.SphereGeometry(0.03, 6, 5), trim, body, 0, 1.0 + k * 0.17, 0.42 - k * 0.04);
+        // belt with a glowing gem
+        const belt = mesh(new THREE.TorusGeometry(0.4, 0.04, 6, 24), trim, body, 0, 1.0, 0);
+        belt.rotation.x = Math.PI / 2;
+        belt.scale.set(1, 0.85, 1);
+        mesh(new THREE.OctahedronGeometry(0.06, 0), magic, body, 0, 1.0, 0.36);
+        // a cape over the shoulders
+        mesh(new THREE.SphereGeometry(0.42, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2.6), robeDark, body, 0, 1.52, 0).scale.set(1, 0.6, 0.9);
+        // hood with a dark face and glowing eyes
+        const head = new THREE.Group();
+        head.position.set(0, 1.86, 0.02);
+        body.add(head);
+        const hoodProf = [[0.01, 0.48], [0.1, 0.42], [0.22, 0.25], [0.27, 0.05], [0.25, -0.12], [0.2, -0.18]].map(([x, y]) => new THREE.Vector2(x, y));
+        mesh(new THREE.LatheGeometry(hoodProf, 16, 0.35, Math.PI * 2 - 0.7), robe, head).rotation.y = Math.PI / 2 + 0.35;
+        mesh(new THREE.SphereGeometry(0.19, 12, 10), glowMat(0x040208), head, 0, 0.02, 0.04);
         for (const s of [-1, 1]) {
-            const e = eyeSprite(0xd8b4fe, 0.24);
-            e.position.set(s * 0.08, 1.8, 0.28);
-            body.add(e);
+            mesh(new THREE.SphereGeometry(0.03, 6, 5), magic, head, s * 0.07, 0.04, 0.2);
+            const e = eyeSprite(0xc084fc, 0.22);
+            e.position.set(s * 0.07, 0.04, 0.24);
+            head.add(e);
+            // sleeves with glowing hands
+            const arm = new THREE.Group();
+            arm.position.set(s * 0.33, 1.45, 0.05);
+            arm.rotation.z = s * 0.35;
+            arm.userData.s = s;
+            body.add(arm);
+            mesh(new THREE.CylinderGeometry(0.09, 0.17, 0.62, 10, 1, true), robe, arm, 0, -0.3, 0);
+            mesh(new THREE.TorusGeometry(0.16, 0.025, 5, 16), trim, arm, 0, -0.6, 0).rotation.x = Math.PI / 2;
+            mesh(new THREE.SphereGeometry(0.07, 8, 6), mat(0xc4b5fd, { emissive: 0x7c3aed, emissiveIntensity: 0.6 }), arm, 0, -0.66, 0);
+            body.userData[s < 0 ? 'armL' : 'armR'] = arm;
         }
+        // staff: twisted wood, gold claws and a crystal
         const staff = new THREE.Group();
-        staff.position.set(0.55, 1.2, 0.2);
+        staff.position.set(0.55, 1.15, 0.22);
         body.add(staff);
-        mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.9, 6), mat(0x3b2412), staff, 0, 0, 0);
-        const orb = mesh(new THREE.SphereGeometry(0.14, 12, 8), glowMat(0xe9d5ff), staff, 0, 1.0, 0);
+        const twist = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([[0, -0.95, 0], [0.03, -0.4, 0.02], [-0.02, 0.2, -0.02], [0.02, 0.75, 0], [0, 0.9, 0]].map((p) => new THREE.Vector3(...p))), 20, 0.03, 6);
+        mesh(twist, mat(0x3b2412, { roughness: 0.8 }), staff);
+        for (let k = 0; k < 3; k++) {
+            const claw = mesh(new THREE.ConeGeometry(0.02, 0.2, 4), trim, staff, Math.cos(k * 2.1) * 0.06, 0.98, Math.sin(k * 2.1) * 0.06);
+            claw.rotation.set(Math.sin(k * 2.1) * 0.5, 0, -Math.cos(k * 2.1) * 0.5);
+        }
+        const orb = mesh(new THREE.OctahedronGeometry(0.11, 0), new THREE.MeshStandardMaterial({ color: 0xe9d5ff, emissive: 0xa855f7, emissiveIntensity: 1.5, flatShading: true }), staff, 0, 1.08, 0);
         orb.castShadow = false;
         const orbGlow = eyeSprite(0xa855f7, 1.0);
-        orbGlow.position.y = 1.0;
+        orbGlow.position.y = 1.08;
         staff.add(orbGlow);
-        hood.rotation.x = -0.1;
+        // little runes circling the staff, and a magic circle on the floor
+        const sparks = [];
+        for (let k = 0; k < 3; k++) {
+            const sp = eyeSprite(0xd8b4fe, 0.18);
+            staff.add(sp);
+            sparks.push(sp);
+        }
+        const circle = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.8).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: runeTexture('192,132,252'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.7 }));
+        circle.position.y = -0.2;
+        body.add(circle);
         return {
             body,
             mats: [robe],
             anim(t, dt, m) {
-                body.position.y = 0.25 + Math.sin(t * 2 + m.phase) * 0.12;
-                staff.rotation.z = Math.sin(t * 1.5 + m.phase) * 0.1;
+                const tt = t + m.phase;
+                body.position.y = 0.25 + Math.sin(tt * 2) * 0.12;
+                circle.position.y = -0.22 - Math.sin(tt * 2) * 0.12;
+                circle.rotation.y = tt * 0.8;
+                staff.rotation.z = Math.sin(tt * 1.5) * 0.1;
+                orb.rotation.y = tt * 2;
                 const charge = m.aimT > 0 ? 1.8 : 1;
-                orbGlow.scale.setScalar(charge + Math.sin(t * 6) * 0.15);
-                r.rotation.y = Math.sin(t * 1.3) * 0.1;
+                orbGlow.scale.setScalar(charge + Math.sin(tt * 6) * 0.15);
+                sparks.forEach((sp, k) => {
+                    const a = tt * 2.5 + k * 2.1;
+                    sp.position.set(Math.cos(a) * 0.25, 1.08 + Math.sin(a * 1.3) * 0.1, Math.sin(a) * 0.25);
+                });
+                robeM.rotation.y = Math.sin(tt * 1.3) * 0.1;
+                const raise = m.aimT > 0 ? -1.2 : 0;
+                if (body.userData.armL) body.userData.armL.rotation.x = raise + Math.sin(tt * 1.7) * 0.1;
+                head.rotation.y = Math.sin(tt * 0.9) * 0.2;
             },
         };
     },
@@ -550,7 +754,7 @@ export function disposeMonster(scene, m) {
         if (o.geometry) o.geometry.dispose();
         if (o.material) {
             (Array.isArray(o.material) ? o.material : [o.material]).forEach((mt) => {
-                if (mt.map && mt.map !== glowTexture()) mt.map.dispose();
+                // (textures are shared between monsters: only the materials go)
                 mt.dispose();
             });
         }

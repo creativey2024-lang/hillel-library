@@ -270,10 +270,6 @@ kbd {
     animation: double-glow 0.9s ease-in-out infinite alternate;
 }
 
-.hud-box.double .hud-coin {
-    box-shadow: 7px -5px 0 -1px #fbbf24, 7px -5px 0 0 rgba(0, 0, 0, 0.15);
-    margin-left: 6px;
-}
 
 @keyframes double-glow {
     from { box-shadow: 0 0 0 rgba(251, 191, 36, 0); }

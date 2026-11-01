@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { weaponMesh, WEAPONS, reloadTime } from './weapons.js';
 import { healMesh, isHeal } from './heals.js';
+import { addGear } from '../../shared/gear.js';
 
 export const CHARACTER_SCALE = 1.6;
 export const BODY_RADIUS = 0.45;
@@ -14,29 +15,133 @@ export const EYE_HEIGHT = 1.45;
 
 let nextId = 1;
 
+// the sail's painted pattern: the glider colour with white chevrons, a dark
+// trailing edge and a round badge (one texture per colour)
+const sailTextures = new Map();
+function sailTexture(color) {
+    if (sailTextures.has(color)) return sailTextures.get(color);
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 256;
+    const ctx = c.getContext('2d');
+    const col = new THREE.Color(color);
+    const css = (k) => `rgb(${Math.round(Math.min(255, col.r * 255 * k))},${Math.round(Math.min(255, col.g * 255 * k))},${Math.round(Math.min(255, col.b * 255 * k))})`;
+    const g = ctx.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, css(1.15));
+    g.addColorStop(1, css(0.8));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 256);
+    // chevrons pointing to the nose (u = across the wing, v = front to back)
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    for (const v0 of [70, 120]) {
+        ctx.beginPath();
+        ctx.moveTo(0, v0 + 40);
+        ctx.lineTo(128, v0);
+        ctx.lineTo(256, v0 + 40);
+        ctx.lineTo(256, v0 + 56);
+        ctx.lineTo(128, v0 + 16);
+        ctx.lineTo(0, v0 + 56);
+        ctx.closePath();
+        ctx.fill();
+    }
+    ctx.fillStyle = css(0.45);
+    ctx.fillRect(0, 226, 256, 30);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    for (let x = 8; x < 256; x += 24) ctx.fillRect(x, 0, 2, 256); // seams
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(128, 196, 17, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = css(0.7);
+    ctx.beginPath();
+    ctx.moveTo(128, 184);
+    ctx.lineTo(139, 204);
+    ctx.lineTo(117, 204);
+    ctx.closePath();
+    ctx.fill();
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    sailTextures.set(color, t);
+    return t;
+}
+
+const tubeMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.7, roughness: 0.3 });
+const darkTubeMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.5, roughness: 0.4 });
+const cableMat = new THREE.LineBasicMaterial({ color: 0x1e293b, transparent: true, opacity: 0.7 });
+function tube(a, b, r, mat) {
+    const dir = new THREE.Vector3().subVectors(b, a);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, dir.length(), 8), mat);
+    m.position.copy(a).addScaledVector(dir, 0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    m.castShadow = true;
+    return m;
+}
+
 function makeGlider(color) {
     const g = new THREE.Group();
+    // the sail: a delta wing that billows a little between its tubes
+    const nose = new THREE.Vector3(0, 0.28, 1.65);
+    const tip = (s) => new THREE.Vector3(s * 2.5, 0.06, -0.85);
+    const root = new THREE.Vector3(0, 0.36, -0.7);
+    const SU = 16;
+    const SV = 6;
+    const pos = [];
+    const uv = [];
+    const idx = [];
+    for (let i = 0; i <= SU; i++) {
+        const u = (i / SU) * 2 - 1;
+        const s = Math.sign(u) || 1;
+        const k = Math.abs(u);
+        const le = nose.clone().lerp(tip(s), k);
+        const te = root.clone().lerp(tip(s), k);
+        for (let j = 0; j <= SV; j++) {
+            const v = j / SV;
+            const p = le.clone().lerp(te, v);
+            p.y -= Math.sin(Math.PI * v) * 0.16 * (1 - k * 0.7) + Math.sin(Math.PI * k) * 0.05;
+            pos.push(p.x, p.y, p.z);
+            uv.push(i / SU, 1 - v);
+        }
+    }
+    for (let i = 0; i < SU; i++) {
+        for (let j = 0; j < SV; j++) {
+            const a = i * (SV + 1) + j;
+            const b = a + SV + 1;
+            idx.push(a, b, a + 1, b, b + 1, a + 1);
+        }
+    }
     const sail = new THREE.BufferGeometry();
-    // a hang-glider wing: two triangles meeting at the nose
-    sail.setAttribute('position', new THREE.Float32BufferAttribute([
-        0, 0.2, 1.6, -2.4, 0, -0.9, 0, 0.35, -0.6,
-        0, 0.2, 1.6, 0, 0.35, -0.6, 2.4, 0, -0.9,
-    ], 3));
+    sail.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    sail.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    sail.setIndex(idx);
     sail.computeVertexNormals();
-    const sailMesh = new THREE.Mesh(sail, new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide, roughness: 0.6 }));
+    const sailMesh = new THREE.Mesh(sail, new THREE.MeshStandardMaterial({ map: sailTexture(color), side: THREE.DoubleSide, roughness: 0.65 }));
     sailMesh.castShadow = true;
     g.add(sailMesh);
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.05, 2.3), new THREE.MeshStandardMaterial({ color: 0xffffff }));
-    stripe.position.set(0, 0.3, 0.45);
-    g.add(stripe);
-    const barMat = new THREE.MeshStandardMaterial({ color: 0x334155 });
-    [-0.5, 0.5].forEach((x) => {
-        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.7, 6), barMat);
-        bar.position.set(x * 0.9, -0.8, 0.1);
-        bar.rotation.z = x * 0.5;
-        g.add(bar);
-    });
-    g.position.y = 2.7;
+    // tubes: leading edges, keel, crossbar
+    g.add(tube(nose, tip(-1), 0.035, tubeMat), tube(nose, tip(1), 0.035, tubeMat));
+    const keelFront = new THREE.Vector3(0, 0.3, 1.6);
+    const keelBack = new THREE.Vector3(0, 0.34, -1.0);
+    g.add(tube(keelFront, keelBack, 0.03, darkTubeMat));
+    g.add(tube(nose.clone().lerp(tip(-1), 0.45).add(new THREE.Vector3(0, -0.02, 0)), nose.clone().lerp(tip(1), 0.45).add(new THREE.Vector3(0, -0.02, 0)), 0.025, darkTubeMat));
+    // a little tail fin
+    const fin = new THREE.Mesh(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.34, -0.55), new THREE.Vector3(0, 0.75, -1.05), new THREE.Vector3(0, 0.34, -1.0)]), new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide }));
+    fin.geometry.computeVertexNormals();
+    g.add(fin);
+    // the A-frame and control bar you hold
+    const top = new THREE.Vector3(0, 0.3, 0.25);
+    const barL = new THREE.Vector3(-0.6, -1.05, 0.55);
+    const barR = new THREE.Vector3(0.6, -1.05, 0.55);
+    g.add(tube(top, barL, 0.025, tubeMat), tube(top, barR, 0.025, tubeMat), tube(barL, barR, 0.03, darkTubeMat));
+    for (const b of [barL, barR]) {
+        const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.22, 8), new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 }));
+        grip.rotation.z = Math.PI / 2;
+        grip.position.copy(b).lerp(new THREE.Vector3(0, b.y, b.z), 0.25);
+        g.add(grip);
+    }
+    // the cables (wires from the control bar to the tips, nose and tail) and the hang strap
+    const pts = [barL, tip(-1), barR, tip(1), barL, keelFront, barR, keelFront, barL, keelBack, barR, keelBack, new THREE.Vector3(0, 0.3, 0.05), new THREE.Vector3(0, -0.55, 0.0)];
+    g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), cableMat));
+    g.position.y = 2.35;
     g.visible = false;
     return g;
 }
@@ -59,7 +164,7 @@ function makeHealthBar() {
 }
 
 // isPlayer: you (on this computer); human: you or a teammate (vs. a bot)
-export function createActor({ scene, gltf, tint, gliderColor, name, isPlayer, human = isPlayer, team = null }) {
+export function createActor({ scene, gltf, tint, gliderColor, name, isPlayer, human = isPlayer, team = null, gearSeed = null }) {
     const root = new THREE.Group();
     const model = gltf.scene.clone(true);
     model.scale.setScalar(CHARACTER_SCALE);
@@ -73,6 +178,8 @@ export function createActor({ scene, gltf, tint, gliderColor, name, isPlayer, hu
             }
         }
     });
+    // a backpack, belt, hat... (bots get a lighter version)
+    addGear(model, { seed: gearSeed ?? name, lite: !human });
     root.add(model);
     scene.add(root);
 
