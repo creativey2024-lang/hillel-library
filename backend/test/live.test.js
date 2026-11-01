@@ -205,3 +205,95 @@ test('library defense: a party plays the leader\'s game, members are told to swi
   a.close();
   b2.close();
 });
+
+test('a finished (or stuck) solo match never locks the party out of invites', async () => {
+  const a = await connect('מארק', 'defense');
+  await a.waitFor((m) => m.type === 'party');
+  // a solo match starts - and ends without anything reporting it (old bug)
+  a.send({ type: 'ready', ready: true });
+  await a.waitFor((m) => m.type === 'start');
+  // the leader comes back to the lobby (a fresh game screen): the match is over
+  a.close();
+  const a2 = await connect('מארק', 'defense');
+  await a2.waitFor((m) => m.type === 'party');
+  const b = await connect('דנה', 'site');
+  a2.send({ type: 'invite', to: 'דנה' });
+  const inv = await b.waitFor((m) => m.type === 'invite');
+  b.send({ type: 'accept', partyId: inv.partyId });
+  const jp = await b.waitFor((m) => m.type === 'joinedParty');
+  assert.equal(jp.game, 'defense');
+  a2.close();
+  b.close();
+});
+
+test('a solo match that ended and reported it: invites work straight away', async () => {
+  const a = await connect('יובל', 'arena');
+  await a.waitFor((m) => m.type === 'party');
+  a.send({ type: 'ready', ready: true });
+  await a.waitFor((m) => m.type === 'start');
+  a.send({ type: 'matchOver' });
+  const b = await connect('שי', 'arena');
+  a.send({ type: 'invite', to: 'שי' });
+  const inv = await b.waitFor((m) => m.type === 'invite');
+  b.send({ type: 'accept', partyId: inv.partyId });
+  await b.waitFor((m) => m.type === 'joinedParty');
+  a.close();
+  b.close();
+});
+
+test('while a match is really on, nobody can be invited into it', async () => {
+  const a = await connect('רן', 'defense');
+  const b = await connect('גל', 'defense');
+  const c = await connect('טל', 'site');
+  await a.waitFor((m) => m.type === 'party');
+  a.send({ type: 'invite', to: 'גל' });
+  const inv = await b.waitFor((m) => m.type === 'invite');
+  b.send({ type: 'accept', partyId: inv.partyId });
+  await b.waitFor((m) => m.type === 'joinedParty');
+  // an invite sent before the match starts, answered after it started
+  a.send({ type: 'invite', to: 'טל' });
+  const invC = await c.waitFor((m) => m.type === 'invite');
+  await a.waitFor((m) => m.type === 'party' && m.party.members.length === 2);
+  a.send({ type: 'ready', ready: true });
+  b.send({ type: 'ready', ready: true });
+  await a.waitFor((m) => m.type === 'start');
+  c.send({ type: 'accept', partyId: invC.partyId });
+  const err = await c.waitFor((m) => m.type === 'error');
+  assert.match(err.error, /באמצע קרב/);
+  // and new invites are refused with a clear reason
+  const d = await connect('נוי', 'site');
+  a.send({ type: 'invite', to: 'נוי' });
+  const res = await a.waitFor((m) => m.type === 'inviteResult' && m.to === 'נוי');
+  assert.equal(res.ok, false);
+  assert.match(res.error, /באמצע קרב/);
+  // the match ends -> the waiting invite works
+  a.send({ type: 'matchOver' });
+  c.send({ type: 'accept', partyId: invC.partyId });
+  await c.waitFor((m) => m.type === 'joinedParty');
+  [a, b, c, d].forEach((x) => x.close());
+});
+
+test('if the leader walks away from the game, a friend still in the lobby takes over', async () => {
+  const { createPartyHub } = require('../src/realtime/partyHub');
+  const srv = http.createServer((req, res) => { res.statusCode = 404; res.end(); });
+  attachLiveChannel(srv, { jwtSecret: SECRET, pingEveryMs: 60000, hub: createPartyHub({ arenaGraceMs: 40 }) });
+  await new Promise((r) => srv.listen(0, r));
+  const savedPort = port;
+  port = srv.address().port;
+  try {
+    const a = await connect('אורי', 'arena');
+    const b = await connect('מיה', 'arena');
+    await a.waitFor((m) => m.type === 'party');
+    a.send({ type: 'invite', to: 'מיה' });
+    const inv = await b.waitFor((m) => m.type === 'invite');
+    b.send({ type: 'accept', partyId: inv.partyId });
+    await b.waitFor((m) => m.type === 'joinedParty');
+    a.close();
+    const view = await b.waitFor((m) => m.type === 'party' && m.party.leader === 'מיה', 2000);
+    assert.equal(view.party.leader, 'מיה');
+    b.close();
+  } finally {
+    port = savedPort;
+    srv.close();
+  }
+});

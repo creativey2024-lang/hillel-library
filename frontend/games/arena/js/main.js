@@ -428,7 +428,7 @@ function endMatch(won) {
     state.mode = 'over';
     $('spectateBar').classList.add('hidden');
     $('pauseScreen').classList.add('hidden');
-    if (team.on) net.send({ type: 'matchOver' });
+    net.send({ type: 'matchOver' }); // (solo matches too, so the party is open for invites again)
     // end-of-match rewards
     const placeBonus = (PLACE_BONUS.find(([top]) => state.place <= top) || [0, 0])[1];
     const survive = Math.floor(state.time / SURVIVE_EVERY);

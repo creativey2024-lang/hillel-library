@@ -1019,6 +1019,7 @@
     // (a small live connection to the server; the game itself shows invites while it's open)
     let liveSocket = null;
     let liveRetries = 0;
+    let pendingAccept = null;
     function startLiveInvites() {
         if (liveSocket || !('WebSocket' in window) || !/^https?:$/.test(window.location.protocol)) return;
         let ws;
@@ -1043,6 +1044,16 @@
                 return;
             }
             if (msg.type === 'invite') showGameInvite(msg);
+            // the answer to "הצטרפות": open the game only once the server let us in
+            if (msg.type === 'joinedParty' && pendingAccept) {
+                const game = msg.game === 'defense' || msg.game === 'arena' ? msg.game : pendingAccept;
+                pendingAccept = null;
+                openGameModal();
+                startGame(game);
+            } else if (msg.type === 'error' && pendingAccept) {
+                pendingAccept = null;
+                showToast(msg.error || 'לא הצלחנו להצטרף לקבוצה', true);
+            }
         };
         ws.onclose = () => {
             liveSocket = null;
@@ -1076,10 +1087,16 @@
             setTimeout(() => shownInvites.delete(msg.partyId), 60000);
         };
         box.querySelector('[data-yes]').addEventListener('click', () => {
-            if (liveSocket) liveSocket.send(JSON.stringify({ type: 'accept', partyId: msg.partyId }));
             close();
-            openGameModal();
-            startGame(inviteGame);
+            if (!liveSocket || liveSocket.readyState !== 1) return showToast('אין חיבור כרגע - נסו שוב', true);
+            pendingAccept = inviteGame;
+            liveSocket.send(JSON.stringify({ type: 'accept', partyId: msg.partyId }));
+            setTimeout(() => {
+                if (pendingAccept) {
+                    pendingAccept = null;
+                    showToast('ההצטרפות לקבוצה לא הצליחה - נסו שוב', true);
+                }
+            }, 6000);
         });
         box.querySelector('[data-no]').addEventListener('click', () => {
             if (liveSocket) liveSocket.send(JSON.stringify({ type: 'decline', partyId: msg.partyId }));

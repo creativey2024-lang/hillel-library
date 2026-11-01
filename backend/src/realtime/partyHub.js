@@ -130,6 +130,16 @@ function createPartyHub({ now = () => Date.now(), random = () => Math.random(), 
     broadcastParty(p);
   }
 
+  // A match is only "on" while someone from the party really has the game
+  // screen open. (If the flag got stuck - a solo match that never reported its
+  // end, a closed tab - nobody should be locked out of the party because of it.)
+  function matchIsOn(p) {
+    if (!p.inMatch) return false;
+    if (p.members.some((m) => inGame(m, p.game))) return true;
+    p.inMatch = false;
+    return false;
+  }
+
   function ensureParty(name, game = 'arena') {
     return partyOf(name) || createSoloParty(name, game);
   }
@@ -176,6 +186,9 @@ function createPartyHub({ now = () => Date.now(), random = () => Math.random(), 
         if (typeof msg.skin === 'string' && SKIN_IDS.has(msg.skin)) u.skin = msg.skin;
         if (isGameRoom(ws.where)) {
           const p = ensureParty(name, ws.where);
+          // a fresh game screen from the leader (or from someone whose team-mates
+          // are not playing) means the last match is over - this is the lobby
+          if (p.inMatch && (p.leader === name || !p.members.some((m) => m !== name && inGame(m, p.game)))) p.inMatch = false;
           // the leader (or someone alone) picks the game the party plays
           if (!p.inMatch && p.leader === name) p.game = ws.where;
           broadcastParty(p);
@@ -197,6 +210,7 @@ function createPartyHub({ now = () => Date.now(), random = () => Math.random(), 
         if (!target) return send(ws, { type: 'inviteResult', ok: false, to: msg.to, error: 'המשתמש לא מחובר כרגע (או שאין משתמש בשם הזה)' });
         if (target.name === name) return send(ws, { type: 'inviteResult', ok: false, to: msg.to, error: 'אי אפשר להזמין את עצמך' });
         if (p.members.includes(target.name)) return send(ws, { type: 'inviteResult', ok: false, to: target.name, error: 'הוא כבר בקבוצה שלך' });
+        if (matchIsOn(p)) return send(ws, { type: 'inviteResult', ok: false, to: target.name, error: 'הקבוצה באמצע קרב - הזמינו אחרי שהוא נגמר' });
         if (p.members.length + p.invites.size >= MAX_PARTY) return send(ws, { type: 'inviteResult', ok: false, to: target.name, error: `בקבוצה יכולים להיות עד ${MAX_PARTY} שחקנים` });
         p.invites.set(target.name, { at: now(), from: name });
         sendTo(target.name, { type: 'invite', from: name, partyId: p.id, size: p.members.length, game: p.game });
@@ -209,7 +223,7 @@ function createPartyHub({ now = () => Date.now(), random = () => Math.random(), 
         if (p) cleanInvites(p);
         if (!p || !p.invites.has(name)) return send(ws, { type: 'error', error: 'ההזמנה כבר לא בתוקף' });
         if (p.members.length >= MAX_PARTY) return send(ws, { type: 'error', error: 'הקבוצה כבר מלאה' });
-        if (p.inMatch) return send(ws, { type: 'error', error: 'הקבוצה באמצע קרב - נסו שוב בעוד רגע' });
+        if (matchIsOn(p)) return send(ws, { type: 'error', error: 'הקבוצה באמצע קרב - נסו שוב בעוד רגע' });
         const inviter = p.invites.get(name).from;
         p.invites.delete(name);
         if (partyOf(name) !== p) leaveParty(name);
@@ -245,9 +259,11 @@ function createPartyHub({ now = () => Date.now(), random = () => Math.random(), 
         maybeStart(p);
         return;
       }
-      case 'matchOver': {
+      case 'matchOver':
+      case 'lobby': {
+        // the match is over / this player is looking at the lobby again
         const p = partyOf(name);
-        if (p) p.inMatch = false;
+        if (p && (msg.type === 'matchOver' || p.leader === name)) p.inMatch = false;
         return;
       }
       case 'net': {
@@ -315,7 +331,16 @@ function createPartyHub({ now = () => Date.now(), random = () => Math.random(), 
             const party = partyOf(username);
             if (!party) return;
             for (const m of party.members) if (m !== username) sendTo(m, { type: 'left', username, game: true }, party.game);
-            if (party.leader === username) party.inMatch = false;
+            if (party.leader === username || !party.members.some((m) => inGame(m, party.game))) party.inMatch = false;
+            // the leader walked away from the game while friends are waiting in
+            // its lobby: someone who is still there takes over, so they can start
+            if (party.leader === username && !party.inMatch) {
+              const next = party.members.find((m) => m !== username && inGame(m, party.game));
+              if (next) {
+                party.leader = next;
+                broadcastParty(party);
+              }
+            }
           }, arenaGraceMs);
           if (u.arenaGoneTimer.unref) u.arenaGoneTimer.unref();
         }

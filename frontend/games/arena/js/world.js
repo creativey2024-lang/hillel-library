@@ -437,6 +437,11 @@ export function createWorld(scene, models, opts = {}) {
         awningB: plain(0x3f8fd8),
         awningC: plain(0x46a65a),
         lamp: plain(0xfff3c4, { emissive: 0xffd36a, emissiveIntensity: 1.1 }),
+        tentDark: plain(0x2b2118, { side: THREE.DoubleSide }),
+        rope: plain(0xd8c08f),
+        pebble: plain(0x9d978d, { roughness: 0.95 }),
+        ash: plain(0x3a3735),
+        bagRed: plain(0xb4262b),
         fire: plain(0xffb347, { emissive: 0xff6a00, emissiveIntensity: 1.6, transparent: true, opacity: 0.9 }),
         // house details: shutters, flowers, rugs, a chimney
         shGreen: tm(0x3f7d4f, T.planks, 1.2),
@@ -832,30 +837,487 @@ export function createWorld(scene, models, opts = {}) {
         addCylinder(x, z, 1, y, y + 1.8, { walk: true });
     }
 
-    function tent(x, z, ry, mat) {
+    // ---- camp pieces: tents, a campfire that really burns, and the odds and ends of a camp
+    const V_UP = new THREE.Vector3(0, 1, 0);
+    // a thin rod between two points (ropes, poles, sticks, tripod legs)
+    function rod(x0, y0, z0, x1, y1, z1, r, mat, seg = 5) {
+        const dir = new THREE.Vector3(x1 - x0, y1 - y0, z1 - z0);
+        const g = new THREE.CylinderGeometry(r, r, dir.length(), seg);
+        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V_UP, dir.normalize()));
+        addGeo(g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), mat);
+    }
+    // a tiny frame for building a piece in its own coordinates (z+ = the front) and placing it in the world
+    function frame(x, z, ry) {
         const y = terrainHeight(x, z);
-        const g = prismGeo(3.2, 2.2, 3.6).rotateY(ry).translate(x, y, z);
-        addGeo(g, mat);
-        addCylinder(x, z, 1.5, y, y + 2.0);
+        const c = Math.cos(ry);
+        const s = Math.sin(ry);
+        return {
+            y,
+            add: (g, mat) => addGeo(g.rotateY(ry).translate(x, y, z), mat),
+            pt: (lx, ly, lz) => [x + lx * c + lz * s, y + ly, z - lx * s + lz * c],
+            rod(a, b, r, mat) {
+                const p = this.pt(...a);
+                const q = this.pt(...b);
+                rod(p[0], p[1], p[2], q[0], q[1], q[2], r, mat);
+            },
+        };
     }
 
-    function campfire(x, z) {
+    function backpack(x, z, ry, mat) {
+        const f = frame(x, z, ry);
+        f.add(new THREE.BoxGeometry(0.5, 0.65, 0.3).translate(0, 0.33, 0), mat);
+        f.add(new THREE.BoxGeometry(0.36, 0.28, 0.12).translate(0, 0.22, 0.2), M.woodDark);
+        f.add(new THREE.CylinderGeometry(0.1, 0.1, 0.55, 8).rotateZ(Math.PI / 2).translate(0, 0.72, 0), M.rope);
+    }
+
+    function tent(x, z, ry, mat, dome = false) {
+        // ry: the yaw the door faces (use atan2(dx, dz) towards where it should look)
+        const f = frame(x, z, ry);
+        const W = 3.2;
+        const H = 2.2;
+        const D = 3.6;
+        if (!dome) {
+            f.add(prismGeo(W, H, D), mat);
+            // stripes down both sides, a darker groundsheet and a doormat
+            const k = Math.atan2(H, W / 2);
+            for (const s of [-1, 1]) {
+                f.add(new THREE.BoxGeometry(0.08, 0.24, D + 0.04).rotateZ(s * (Math.PI / 2 - k)).translate(s * (0.64 + 0.032), 1.32 + 0.024, 0), M.white);
+            }
+            f.add(new THREE.BoxGeometry(W + 0.5, 0.05, D + 0.4).translate(0, 0.025, 0), M.tentDark);
+            // the door: white trim, dark opening, flaps rolled up at the sides
+            f.add(prismGeo(1.5, 1.85, 0.05).translate(0, 0, D / 2 + 0.01), M.white);
+            f.add(prismGeo(1.2, 1.65, 0.06).translate(0, 0, D / 2 + 0.03), M.tentDark);
+            f.add(new THREE.BoxGeometry(0.07, 0.07, 0.07).translate(0, 1.55, D / 2 + 0.07), M.gold);
+            for (const s of [-1, 1]) f.add(new THREE.CylinderGeometry(0.1, 0.1, 1.4, 6).rotateZ(-s * 0.55).translate(s * 0.78, 0.8, D / 2 + 0.1), mat);
+            // a vent at the back
+            f.add(prismGeo(0.5, 0.45, 0.05).translate(0, 0.9, -D / 2 - 0.01), M.tentDark);
+            // the ridge pole sticks out at both ends, two A-poles hold the front
+            f.rod([0, H + 0.02, -D / 2 - 0.5], [0, H + 0.02, D / 2 + 0.5], 0.045, M.woodLight, 6);
+            for (const s of [-1, 1]) f.rod([s * 1.25, 0, D / 2 + 0.35], [0, H, D / 2 + 0.3], 0.04, M.woodLight, 6);
+            // guy ropes with pegs
+            for (const sz of [-1, 1]) {
+                f.rod([0, H, sz * (D / 2 + 0.5)], [0, 0.05, sz * (D / 2 + 2.3)], 0.012, M.rope, 4);
+                f.rod([0, 0.0, sz * (D / 2 + 2.3)], [0, 0.3, sz * (D / 2 + 2.45)], 0.04, M.woodDark, 5);
+                for (const sx of [-1, 1]) {
+                    f.rod([sx * 0.6, 1.4, sz * 1.3], [sx * 2.5, 0.05, sz * 2.3], 0.012, M.rope, 4);
+                    f.rod([sx * 2.5, 0.0, sz * 2.3], [sx * 2.6, 0.3, sz * 2.4], 0.04, M.woodDark, 5);
+                }
+            }
+        } else {
+            // a dome tent: a half ball with a porch, crossing poles and a dark door
+            f.add(new THREE.SphereGeometry(1.9, 14, 9, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.1, 0.9, 1.1), mat);
+            f.add(new THREE.SphereGeometry(0.95, 10, 7, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 1.1, 0.85).translate(0, 0, 1.7), M.fabricOrange === mat ? M.fabricRed : M.fabricOrange);
+            f.add(new THREE.SphereGeometry(0.62, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 1.25, 0.5).translate(0, 0, 2.3), M.tentDark);
+            for (const a of [0.55, -0.55]) {
+                f.add(new THREE.TorusGeometry(2.08, 0.035, 5, 22, Math.PI).scale(1, 0.9, 1).rotateY(a), M.darkMetal);
+            }
+            f.add(new THREE.CylinderGeometry(2.3, 2.3, 0.05, 16).translate(0, 0.025, 0), M.tentDark);
+            for (let i = 0; i < 4; i++) {
+                const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+                f.rod([Math.cos(a) * 1.9, 1.0, Math.sin(a) * 1.9], [Math.cos(a) * 3.2, 0.05, Math.sin(a) * 3.2], 0.012, M.rope, 4);
+                f.rod([Math.cos(a) * 3.2, 0, Math.sin(a) * 3.2], [Math.cos(a) * 3.28, 0.3, Math.sin(a) * 3.28], 0.04, M.woodDark, 5);
+            }
+        }
+        // by the door: a rolled sleeping bag, a lantern and a backpack
+        const porch = dome ? 3.2 : D / 2 + 1.1;
+        f.add(new THREE.BoxGeometry(2.0, 0.04, 1.2).translate(-0.2, 0.02, porch), (x * 7 + z) % 2 > 0 ? M.rugRed : M.rugBlue);
+        f.add(new THREE.CylinderGeometry(0.22, 0.22, 1.0, 10).rotateZ(Math.PI / 2).translate(-0.4, 0.26, porch), M.bagRed);
+        for (const bx of [-0.7, -0.1]) f.add(new THREE.CylinderGeometry(0.23, 0.23, 0.07, 10).rotateZ(Math.PI / 2).translate(bx, 0.26, porch), M.woodDark);
+        f.add(new THREE.CylinderGeometry(0.1, 0.12, 0.3, 8).translate(0.6, 0.2, porch + 0.1), M.lamp);
+        f.add(new THREE.CylinderGeometry(0.13, 0.13, 0.04, 8).translate(0.6, 0.06, porch + 0.1), M.darkMetal);
+        f.add(new THREE.CylinderGeometry(0.13, 0.13, 0.04, 8).translate(0.6, 0.36, porch + 0.1), M.darkMetal);
+        const bp = f.pt(2.0, 0, porch - 0.3);
+        backpack(bp[0], bp[2], ry + 0.5, M.fabricGreen === mat ? M.fabricBlue : M.fabricGreen);
+        addCylinder(x, z, dome ? 2.0 : 1.5, f.y, f.y + 2.0);
+    }
+
+    function picnicTable(x, z) {
         const y = terrainHeight(x, z);
+        addGeo(boxGeo(x, y + 0.82, z, 2.8, 0.1, 1.15), M.wood);
+        for (let i = -3; i <= 3; i++) addGeo(boxGeo(x + i * 0.4, y + 0.88, z, 0.02, 0.02, 1.15), M.woodDark);
+        for (const sz of [-1, 1]) {
+            addGeo(boxGeo(x, y + 0.48, z + sz * 0.95, 2.8, 0.1, 0.4), M.woodLight);
+            for (const sx of [-1, 1]) {
+                rod(x + sx * 1.0, y, z + sz * 0.45, x + sx * 1.0, y + 0.8, z + sz * 0.05, 0.06, M.woodDark, 5);
+                addGeo(boxGeo(x + sx * 1.0, y + 0.2, z + sz * 0.95, 0.1, 0.4, 0.1), M.woodDark);
+            }
+        }
+        addBox(x, y, z, 2.9, 0.9, 2.2);
+        // a checkered cloth and a mug
+        addGeo(boxGeo(x, y + 0.875, z, 1.0, 0.012, 1.15), M.red);
+        addGeo(new THREE.CylinderGeometry(0.07, 0.06, 0.12, 8).translate(x + 0.9, y + 0.93, z + 0.2), M.whitePaint);
+    }
+
+    function stump(x, z, h = 0.5, r = 0.42) {
+        const y = terrainHeight(x, z);
+        addGeo(new THREE.CylinderGeometry(r, r * 1.15, h, 10).translate(x, y + h / 2, z), M.woodDark);
+        addGeo(new THREE.CylinderGeometry(r * 0.92, r * 0.92, 0.03, 10).translate(x, y + h + 0.005, z), M.woodLight);
+        addGeo(new THREE.TorusGeometry(r * 0.55, 0.012, 4, 14).rotateX(Math.PI / 2).translate(x, y + h + 0.03, z), M.wood);
+    }
+
+    function axeStump(x, z) {
+        stump(x, z, 0.62, 0.45);
+        const y = terrainHeight(x, z) + 0.66;
+        rod(x - 0.1, y, z, x + 0.25, y + 0.85, z + 0.05, 0.03, M.wood, 5);
+        addGeo(boxGeo(x - 0.02, y + 0.12, z, 0.34, 0.2, 0.05), M.darkMetal);
+    }
+
+    function barrel(x, z, h = 1.0) {
+        const y = terrainHeight(x, z);
+        addGeo(new THREE.CylinderGeometry(0.46, 0.4, h, 12).translate(x, y + h / 2, z), M.wood);
+        for (const t of [0.18, 0.82]) addGeo(new THREE.CylinderGeometry(0.475, 0.475, 0.06, 12).translate(x, y + h * t, z), M.darkMetal);
+        addGeo(new THREE.CylinderGeometry(0.4, 0.4, 0.03, 12).translate(x, y + h, z), M.woodLight);
+        addCylinder(x, z, 0.5, y, y + h);
+    }
+
+    function woodPile(x, z, ry = 0) {
+        const f = frame(x, z, ry);
+        for (const sx of [-1, 1]) f.add(new THREE.BoxGeometry(0.12, 1.3, 0.12).translate(sx * 1.35, 0.65, 0.45), M.woodDark);
+        for (const sx of [-1, 1]) f.add(new THREE.BoxGeometry(0.12, 1.3, 0.12).translate(sx * 1.35, 0.65, -0.45), M.woodDark);
+        for (let row = 0; row < 4; row++) {
+            for (let i = 0; i < 5 - (row === 3 ? 1 : 0); i++) {
+                for (const sz of [-0.28, 0.28]) {
+                    const lx = -1.2 + i * 0.6 + (row % 2) * 0.3;
+                    f.add(new THREE.CylinderGeometry(0.15, 0.15, 1.1, 7).rotateZ(Math.PI / 2).rotateY(Math.PI / 2).translate(lx, 0.17 + row * 0.27, sz), M.woodDark);
+                    f.add(new THREE.CylinderGeometry(0.115, 0.115, 0.02, 7).rotateX(Math.PI / 2).translate(lx, 0.17 + row * 0.27, sz + Math.sign(sz) * 0.55), M.woodLight);
+                }
+            }
+        }
+        const p = f.pt(0, 0, 0);
+        addBox(p[0], p[1], p[2], Math.abs(Math.cos(ry)) * 2.9 + Math.abs(Math.sin(ry)) * 1.3, 1.1, Math.abs(Math.sin(ry)) * 2.9 + Math.abs(Math.cos(ry)) * 1.3);
+    }
+
+    function clothesLine(x0, z0, x1, z1) {
+        const cols = [M.fabricRed, M.fabricBlue, M.white, M.fabricOrange, M.fabricGreen];
+        for (const [x, z] of [[x0, z0], [x1, z1]]) {
+            const y = terrainHeight(x, z);
+            addGeo(new THREE.CylinderGeometry(0.06, 0.08, 2.6, 6).translate(x, y + 1.3, z), M.wood);
+            addCylinder(x, z, 0.1, y, y + 2.6);
+        }
+        const ya = terrainHeight(x0, z0) + 2.4;
+        const yb = terrainHeight(x1, z1) + 2.4;
+        const ang = -Math.atan2(z1 - z0, x1 - x0);
+        const len = Math.hypot(x1 - x0, z1 - z0);
+        for (let i = 0; i < 24; i++) {
+            const t0 = i / 24;
+            const t1 = (i + 1) / 24;
+            const sag = (t) => Math.sin(t * Math.PI) * 0.22;
+            rod(x0 + (x1 - x0) * t0, ya + (yb - ya) * t0 - sag(t0), z0 + (z1 - z0) * t0, x0 + (x1 - x0) * t1, ya + (yb - ya) * t1 - sag(t1), z0 + (z1 - z0) * t1, 0.012, M.rope, 4);
+        }
+        for (let i = 0; i < 5; i++) {
+            const t = (i + 0.7) / 5.6;
+            const x = x0 + (x1 - x0) * t;
+            const z = z0 + (z1 - z0) * t;
+            const y = ya + (yb - ya) * t - Math.sin(t * Math.PI) * 0.22;
+            const h = 0.55 + (i % 3) * 0.12;
+            addGeo(new THREE.BoxGeometry(len / 7.5, h, 0.02).rotateY(ang).translate(x, y - h / 2, z), cols[i % cols.length]);
+        }
+    }
+
+    // a lantern hanging on a wooden post
+    function campLantern(x, z) {
+        const y = terrainHeight(x, z);
+        addGeo(new THREE.CylinderGeometry(0.06, 0.09, 2.8, 6).translate(x, y + 1.4, z), M.wood);
+        addGeo(boxGeo(x + 0.3, y + 2.75, z, 0.7, 0.07, 0.07), M.wood);
+        rod(x + 0.2, y + 2.4, z, x + 0.55, y + 2.72, z, 0.03, M.wood, 4);
+        addGeo(new THREE.CylinderGeometry(0.16, 0.2, 0.34, 8).translate(x + 0.6, y + 2.5, z), M.lamp);
+        addGeo(new THREE.ConeGeometry(0.24, 0.16, 8).translate(x + 0.6, y + 2.75, z), M.darkMetal);
+        addCylinder(x, z, 0.12, y, y + 2.8);
+    }
+
+    function campSign(x, z, ry) {
+        const f = frame(x, z, ry);
+        for (const sx of [-1, 1]) f.add(new THREE.BoxGeometry(0.14, 2.4, 0.14).translate(sx * 1.2, 1.2, 0), M.woodDark);
+        f.add(new THREE.BoxGeometry(2.9, 0.8, 0.1).translate(0, 2.0, 0.02), M.wood);
+        f.add(new THREE.BoxGeometry(3.0, 0.08, 0.14).translate(0, 2.44, 0.02), M.woodDark);
+        f.add(new THREE.BoxGeometry(3.0, 0.08, 0.14).translate(0, 1.58, 0.02), M.woodDark);
+        // a green banner with a gold emblem (a tent and a star)
+        f.add(new THREE.BoxGeometry(2.4, 0.52, 0.03).translate(0, 2.0, 0.09), M.fabricGreen);
+        f.add(prismGeo(0.5, 0.34, 0.03).translate(-0.5, 1.84, 0.12), M.gold);
+        f.add(new THREE.CylinderGeometry(0.17, 0.17, 0.03, 5).rotateX(Math.PI / 2).translate(0.5, 2.0, 0.12), M.gold);
+        const p = f.pt(0, 0, 0);
+        addCylinder(p[0], p[2], 0.2, f.y, f.y + 2.5);
+    }
+
+    // a fire that really burns: glowing coals, leaning logs, flames, sparks and smoke
+    function campfire(x, z, { pot = false, sticks = true } = {}) {
+        const y = terrainHeight(x, z);
+        addGeo(new THREE.CylinderGeometry(1.2, 1.3, 0.06, 16).translate(x, y + 0.03, z), M.ash);
+        // a ring of stones
+        for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * Math.PI * 2;
+            const r = 0.16 + (i % 3) * 0.05;
+            addGeo(new THREE.DodecahedronGeometry(r, 0).scale(1, 0.75, 1).rotateY(i).translate(x + Math.cos(a) * 1.05, y + r * 0.5, z + Math.sin(a) * 1.05), i % 2 ? M.stoneDark : M.pebble);
+        }
+        // two logs on the ground and a little teepee of sticks
+        for (let i = 0; i < 2; i++) {
+            addGeo(new THREE.CylinderGeometry(0.13, 0.13, 1.7, 7).rotateZ(Math.PI / 2).rotateY(i * 1.2 + 0.3).translate(x, y + 0.16, z), M.woodDark);
+        }
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 + 0.4;
+            rod(x + Math.cos(a) * 0.85, y + 0.05, z + Math.sin(a) * 0.85, x + Math.cos(a) * 0.08, y + 1.0, z + Math.sin(a) * 0.08, 0.075, i % 2 ? M.woodDark : M.wood, 6);
+        }
+        // glowing coals + a soft glow on the ground
+        const coals = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.82, 0.05, 12), new THREE.MeshBasicMaterial({ color: 0xff6a1a }));
+        coals.position.set(x, y + 0.08, z);
+        scene.add(coals);
+        const glowMat = new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending });
+        const glow = new THREE.Mesh(new THREE.CircleGeometry(3.6, 24).rotateX(-Math.PI / 2), glowMat);
+        glow.position.set(x, y + 0.12, z);
+        scene.add(glow);
+        // flames: three cones inside each other + small tongues
+        const mk = (r, h, color, op) => {
+            const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8, 1, true), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op, side: THREE.DoubleSide, depthWrite: false }));
+            m.position.set(x, y + 0.12 + h / 2, z);
+            scene.add(m);
+            return m;
+        };
+        const flames = [
+            { m: mk(0.62, 1.7, 0xff6a14, 0.85), p: 0, k: 1 },
+            { m: mk(0.44, 1.3, 0xffb02e, 0.9), p: 1.3, k: 1 },
+            { m: mk(0.25, 0.85, 0xfff1a6, 0.95), p: 2.6, k: 1 },
+        ];
         for (let i = 0; i < 4; i++) {
-            const g = new THREE.CylinderGeometry(0.12, 0.12, 1.4, 6).rotateZ(Math.PI / 2).rotateY((i * Math.PI) / 4).translate(x, y + 0.15, z);
-            addGeo(g, M.woodDark);
+            const a = (i / 4) * Math.PI * 2 + 0.5;
+            const m = mk(0.2, 0.75, i % 2 ? 0xff7a1c : 0xffa42b, 0.85);
+            m.position.x = x + Math.cos(a) * 0.38;
+            m.position.z = z + Math.sin(a) * 0.38;
+            m.rotation.z = -Math.cos(a) * 0.22;
+            m.rotation.x = Math.sin(a) * 0.22;
+            flames.push({ m, p: i * 1.7 + 0.5, k: 0.8 });
         }
+        // sparks flying up and puffs of smoke
+        const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffd27a });
+        const sparks = [];
         for (let i = 0; i < 9; i++) {
-            const a = (i / 9) * Math.PI * 2;
-            addGeo(new THREE.DodecahedronGeometry(0.22, 0).translate(x + Math.cos(a) * 0.95, y + 0.1, z + Math.sin(a) * 0.95), M.stoneDark);
+            const m = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.07), sparkMat);
+            scene.add(m);
+            sparks.push({ m, ph: i / 9, sx: (i * 2.399) % 6.28, sp: 0.28 + (i % 4) * 0.07 });
         }
-        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.3, 8), M.fire);
-        flame.position.set(x, y + 0.75, z);
-        scene.add(flame);
+        const smoke = [];
+        for (let i = 0; i < 5; i++) {
+            const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 0), new THREE.MeshBasicMaterial({ color: 0x8d8d92, transparent: true, opacity: 0.25, depthWrite: false }));
+            scene.add(m);
+            smoke.push({ m, ph: i / 5 });
+        }
         animated.push((t) => {
-            flame.scale.set(1 + Math.sin(t * 13) * 0.08, 1 + Math.sin(t * 17 + 1) * 0.15, 1 + Math.cos(t * 11) * 0.08);
-            flame.rotation.y = t * 2;
+            const flick = 0.88 + Math.sin(t * 11) * 0.06 + Math.sin(t * 23) * 0.04;
+            for (const fl of flames) {
+                const s = fl.k * (0.85 + Math.sin(t * 9 + fl.p) * 0.12 + Math.sin(t * 17 + fl.p * 2) * 0.06);
+                fl.m.scale.set(1 + Math.sin(t * 13 + fl.p) * 0.1, s, 1 + Math.cos(t * 12 + fl.p) * 0.1);
+                fl.m.rotation.y = t * 2 + fl.p;
+            }
+            glowMat.opacity = 0.17 * flick + 0.04;
+            coals.material.color.setHSL(0.045 + Math.sin(t * 5) * 0.01, 1, 0.5 + Math.sin(t * 7) * 0.06);
+            for (const s of sparks) {
+                const u = (t * s.sp + s.ph) % 1;
+                s.m.position.set(x + Math.sin(s.sx + u * 6) * 0.5 * u + u * 0.5, y + 0.9 + u * 3.4, z + Math.cos(s.sx + u * 5) * 0.5 * u);
+                s.m.scale.setScalar(Math.max(0.01, 1 - u));
+                s.m.rotation.set(t * 4, t * 3, 0);
+            }
+            for (const s of smoke) {
+                const u = (t * 0.12 + s.ph) % 1;
+                s.m.position.set(x + u * 1.6 + Math.sin(u * 6 + s.ph * 9) * 0.3, y + 2.1 + u * 5.5, z + Math.cos(u * 5 + s.ph * 9) * 0.3);
+                s.m.scale.setScalar(0.7 + u * 2.4);
+                s.m.material.opacity = 0.3 * Math.sin(u * Math.PI);
+            }
         });
+        // roasting sticks with marshmallows
+        if (sticks) {
+            for (let i = 0; i < 2; i++) {
+                const a = 0.9 + i * 2.6;
+                const ex = x + Math.cos(a) * 2.3;
+                const ez = z + Math.sin(a) * 2.3;
+                const tx = x + Math.cos(a) * 1.15;
+                const tz = z + Math.sin(a) * 1.15;
+                rod(ex, y, ez, tx, y + 1.0, tz, 0.022, M.wood, 4);
+                addGeo(new THREE.SphereGeometry(0.075, 7, 5).translate(tx, y + 1.02, tz), M.white);
+                addGeo(new THREE.SphereGeometry(0.075, 7, 5).translate(tx - Math.cos(a) * 0.1, y + 0.9, tz - Math.sin(a) * 0.1), M.white);
+            }
+        }
+        // a tripod with a hanging pot
+        if (pot) {
+            const apex = [x, y + 2.7, z];
+            for (let i = 0; i < 3; i++) {
+                const a = (i / 3) * Math.PI * 2 + 1;
+                rod(x + Math.cos(a) * 1.7, y, z + Math.sin(a) * 1.7, apex[0], apex[1], apex[2], 0.06, M.wood, 6);
+            }
+            rod(x, y + 2.7, z, x, y + 1.95, z, 0.015, M.darkMetal, 4);
+            addGeo(new THREE.CylinderGeometry(0.33, 0.27, 0.36, 10).translate(x, y + 1.78, z), M.darkMetal);
+            addGeo(new THREE.TorusGeometry(0.31, 0.02, 4, 12).rotateX(Math.PI / 2).translate(x, y + 1.96, z), M.darkMetal);
+        }
+    }
+
+    // ---- more little things for the other places: torches, braziers, banners, scarecrows, wells, cairns, reeds
+    function miniFlame(x, y, z, s = 1) {
+        const mk = (r, h, color, op) => {
+            const m = new THREE.Mesh(new THREE.ConeGeometry(r * s, h * s, 6, 1, true), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op, side: THREE.DoubleSide, depthWrite: false }));
+            m.position.set(x, y + (h * s) / 2, z);
+            scene.add(m);
+            return m;
+        };
+        const a = mk(0.2, 0.55, 0xff6a14, 0.9);
+        const b = mk(0.12, 0.38, 0xffd35a, 0.95);
+        const ph = x * 0.37 + z * 0.91;
+        animated.push((t) => {
+            const k = 0.85 + Math.sin(t * 12 + ph) * 0.15 + Math.sin(t * 21 + ph * 2) * 0.07;
+            a.scale.set(1, k, 1);
+            b.scale.set(1, k * 0.95, 1);
+            a.rotation.y = t * 3 + ph;
+        });
+    }
+
+    function brazier(x, z) {
+        const y = terrainHeight(x, z);
+        for (let i = 0; i < 3; i++) {
+            const a = (i / 3) * Math.PI * 2;
+            rod(x + Math.cos(a) * 0.5, y, z + Math.sin(a) * 0.5, x + Math.cos(a) * 0.2, y + 0.95, z + Math.sin(a) * 0.2, 0.05, M.darkMetal, 5);
+        }
+        addGeo(new THREE.SphereGeometry(0.55, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2).translate(x, y + 1.15, z), M.darkMetal);
+        addGeo(new THREE.CylinderGeometry(0.5, 0.5, 0.04, 10).translate(x, y + 1.13, z), M.fire);
+        miniFlame(x, y + 1.15, z, 1.5);
+        addCylinder(x, z, 0.45, y, y + 1.4);
+    }
+
+    function torch(x, y, z, s = 1) {
+        addGeo(new THREE.CylinderGeometry(0.05, 0.06, 0.8, 6).translate(x, y + 0.4, z), M.woodDark);
+        addGeo(new THREE.CylinderGeometry(0.1, 0.06, 0.2, 6).translate(x, y + 0.85, z), M.darkMetal);
+        miniFlame(x, y + 0.92, z, s);
+    }
+
+    // a standing cloth banner on a pole (ry: the way its flat side looks)
+    function banner(x, y, z, ry, color, w = 1.3, h = 3) {
+        const mat = plain(color, { side: THREE.DoubleSide });
+        const put = (g, m) => addGeo(g.rotateY(ry).translate(x, y, z), m);
+        const ch = h - 0.9;
+        put(new THREE.BoxGeometry(0.12, h + 0.3, 0.12).translate(0, (h + 0.3) / 2, -0.1), M.woodDark);
+        put(new THREE.BoxGeometry(w + 0.3, 0.1, 0.1).translate(0, h, 0), M.woodDark);
+        put(new THREE.BoxGeometry(w, ch, 0.03).translate(0, h - 0.05 - ch / 2, 0), mat);
+        const tri = new THREE.Shape();
+        tri.moveTo(-w / 2, 0);
+        tri.lineTo(w / 2, 0);
+        tri.lineTo(0, -0.7);
+        tri.closePath();
+        put(new THREE.ShapeGeometry(tri).translate(0, h - 0.05 - ch, 0), mat);
+        put(new THREE.CylinderGeometry(0.17, 0.17, 0.035, 5).rotateX(Math.PI / 2).translate(0, h - 0.05 - ch / 2, 0.03), M.gold);
+        addCylinder(x, z, 0.15, y, y + h);
+    }
+
+    function scarecrow(x, z, ry) {
+        const f = frame(x, z, ry);
+        f.rod([0, 0, 0], [0, 2.2, 0], 0.05, M.wood, 5);
+        f.rod([-0.95, 1.65, 0], [0.95, 1.65, 0], 0.045, M.wood, 5);
+        f.add(new THREE.CylinderGeometry(0.28, 0.33, 0.85, 8).translate(0, 1.5, 0), M.fabricBlue);
+        f.add(new THREE.BoxGeometry(0.9, 0.3, 0.3).translate(0, 1.82, 0), M.fabricBlue);
+        f.add(new THREE.SphereGeometry(0.27, 8, 6).translate(0, 2.2, 0), M.hay);
+        f.add(new THREE.CylinderGeometry(0.5, 0.5, 0.04, 10).translate(0, 2.38, 0), M.wood);
+        f.add(new THREE.CylinderGeometry(0.24, 0.3, 0.3, 8).translate(0, 2.53, 0), M.wood);
+        for (const sx of [-1, 1]) {
+            f.add(new THREE.ConeGeometry(0.1, 0.4, 5).rotateZ(sx * 1.2).translate(sx * 1.1, 1.62, 0), M.hay);
+            f.add(new THREE.ConeGeometry(0.1, 0.35, 5).rotateX(Math.PI).translate(sx * 0.17, 1.0, 0.0), M.hay);
+        }
+        f.add(new THREE.SphereGeometry(0.035, 5, 4).translate(-0.09, 2.24, 0.24), M.darkMetal);
+        f.add(new THREE.SphereGeometry(0.035, 5, 4).translate(0.09, 2.24, 0.24), M.darkMetal);
+        addCylinder(x, z, 0.35, f.y, f.y + 2.2);
+    }
+
+    function well(x, z) {
+        const y = terrainHeight(x, z);
+        for (let i = 0; i < 10; i++) {
+            const a = (i / 10) * Math.PI * 2;
+            addGeo(boxGeo(x + Math.cos(a) * 0.95, y + 0.45, z + Math.sin(a) * 0.95, 0.62, 0.9, 0.5, -a + Math.PI / 2), i % 2 ? M.stone : M.stoneDark);
+        }
+        addGeo(new THREE.CylinderGeometry(0.85, 0.85, 0.05, 12).translate(x, y + 0.4, z), M.glass);
+        for (const sx of [-1, 1]) addGeo(boxGeo(x + sx * 1.0, y + 1.55, z, 0.14, 1.5, 0.14), M.woodDark);
+        addGeo(new THREE.CylinderGeometry(0.07, 0.07, 2.3, 6).rotateZ(Math.PI / 2).translate(x, y + 2.15, z), M.wood);
+        addGeo(prismGeo(2.6, 0.9, 1.7).translate(x, y + 2.25, z), M.roofRed);
+        rod(x, y + 2.1, z, x, y + 1.15, z, 0.015, M.rope, 4);
+        addGeo(new THREE.CylinderGeometry(0.2, 0.16, 0.26, 8).translate(x, y + 1.05, z), M.wood);
+        addCylinder(x, z, 1.35, y, y + 1.0);
+    }
+
+    function cairn(x, z, s = 1) {
+        const y = terrainHeight(x, z);
+        for (let i = 0; i < 5; i++) {
+            const r = (0.62 - i * 0.1) * s;
+            addGeo(new THREE.DodecahedronGeometry(r, 0).scale(1, 0.55, 1).rotateY(i * 1.3).translate(x + (i % 2) * 0.05 * s, y + (0.18 + i * 0.3) * s, z), i % 2 ? M.stoneDark : M.pebble);
+        }
+    }
+
+    // reeds and cattails at the water's edge
+    function reeds(cx, cz, n = 9, spread = 1.6) {
+        for (let i = 0; i < n; i++) {
+            const a = rng() * Math.PI * 2;
+            const r = Math.sqrt(rng()) * spread;
+            const x = cx + Math.cos(a) * r;
+            const z = cz + Math.sin(a) * r;
+            const y = Math.max(0, terrainHeight(x, z));
+            const h = 1.1 + rng() * 0.9;
+            const lean = (rng() - 0.5) * 0.35;
+            rod(x, y - 0.05, z, x + lean, y + h, z + lean * 0.5, 0.025, M.leaf, 4);
+            if (i % 3 === 0) addGeo(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 5).translate(x + lean, y + h - 0.1, z + lean * 0.5), M.woodDark);
+        }
+    }
+
+    function lilyPads(cx, cz, n = 8, spread = 6) {
+        for (let i = 0; i < n; i++) {
+            const a = rng() * Math.PI * 2;
+            const r = Math.sqrt(rng()) * spread;
+            const x = cx + Math.cos(a) * r;
+            const z = cz + Math.sin(a) * r;
+            if (terrainHeight(x, z) > -0.3) continue;
+            addGeo(new THREE.CylinderGeometry(0.4 + rng() * 0.25, 0.4, 0.03, 9).translate(x, 0.1, z), M.leaf);
+            if (rng() < 0.4) addGeo(new THREE.SphereGeometry(0.1, 6, 4).translate(x + 0.1, 0.18, z), rng() < 0.5 ? M.flPink : M.flWhite);
+        }
+    }
+
+    // low rows of crops
+    function cropRows(cx, cz, w, d, mat) {
+        const y = terrainHeight(cx, cz);
+        for (let i = -Math.floor(w / 2); i <= Math.floor(w / 2); i++) {
+            const x = cx + i * 1.4;
+            addGeo(boxGeo(x, y + 0.2, cz, 0.35, 0.45, d), mat);
+            addGeo(boxGeo(x, y + 0.04, cz, 1.0, 0.1, d + 0.2), M.woodDark);
+        }
+    }
+
+    function lifebuoy(x, y, z, ry) {
+        const g = new THREE.TorusGeometry(0.4, 0.12, 6, 14).rotateY(ry).translate(x, y, z);
+        addGeo(g, M.red);
+        addGeo(new THREE.TorusGeometry(0.4, 0.125, 6, 14, 0.7).rotateY(ry).translate(x, y, z), M.whitePaint);
+    }
+
+    // a flat, free place near (cx, cz) for something that needs room (a tent, a fire)
+    function flatSpot(cx, cz, r0, r1, pad = 3, maxSlope = 0.18) {
+        for (let i = 0; i < 80; i++) {
+            const a = rng() * Math.PI * 2;
+            const r = r0 + rng() * (r1 - r0);
+            const x = cx + Math.cos(a) * r;
+            const z = cz + Math.sin(a) * r;
+            if (!blocked(x, z, pad) && slopeAt(x, z) < maxSlope) return { x, z };
+        }
+        return null;
+    }
+
+    // baskets of fruit and vegetables on a market table
+    function stallGoods(sx, sy, sz) {
+        const cols = [M.red, M.fabricOrange, M.flYellow, M.leaf, M.fabricGreen, M.flPink];
+        for (let b = 0; b < 3; b++) {
+            const bx = sx - 1.0 + b * 1.0;
+            addGeo(new THREE.CylinderGeometry(0.32, 0.26, 0.2, 8).translate(bx, sy + 1.0, sz), M.wood);
+            for (let k = 0; k < 6; k++) {
+                const a = k * 1.05;
+                addGeo(new THREE.SphereGeometry(0.1, 6, 5).translate(bx + Math.cos(a) * 0.14, sy + 1.14 + (k > 3 ? 0.08 : 0), sz + Math.sin(a) * 0.14), cols[(b * 2 + k) % cols.length]);
+            }
+        }
+    }
+
+    function mailbox(x, z, ry) {
+        const f = frame(x, z, ry);
+        f.add(new THREE.BoxGeometry(0.1, 1.1, 0.1).translate(0, 0.55, 0), M.woodDark);
+        f.add(new THREE.BoxGeometry(0.34, 0.26, 0.5).translate(0, 1.2, 0), M.blue);
+        f.add(new THREE.CylinderGeometry(0.17, 0.17, 0.5, 8, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2 * 0).translate(0, 1.33, 0), M.blue);
+        f.add(new THREE.BoxGeometry(0.03, 0.2, 0.05).translate(0.2, 1.3, 0.1), M.red);
     }
 
     function flagPole(x, z, color) {
@@ -953,6 +1415,7 @@ export function createWorld(scene, models, opts = {}) {
                     const fz = z + (dz < 0 ? 1 : -1) * (d / 2 + 3.5);
                     fenceLine(x - w / 2 - 1.5, fz, x - 1.4, fz);
                     fenceLine(x + 1.4, fz, x + w / 2 + 1.5, fz);
+                    mailbox(x + w / 2 + 2.2, fz + (dz < 0 ? 1.6 : -1.6), dz < 0 ? Math.PI / 2 : -Math.PI / 2);
                 }
             });
             if (poi.kind === 'suburb') {
@@ -977,7 +1440,15 @@ export function createWorld(scene, models, opts = {}) {
                     addGeo(boxGeo(sx, sy + 2.3, sz, 3.4, 0.1, 2, 0), [M.awningA, M.awningB, M.awningC][i]);
                     addGeo(boxGeo(sx - 1.5, sy + 1.15, sz + 0.8, 0.1, 2.3, 0.1), M.woodDark);
                     addGeo(boxGeo(sx + 1.5, sy + 1.15, sz + 0.8, 0.1, 2.3, 0.1), M.woodDark);
+                    stallGoods(sx, sy, sz);
+                    // a scalloped fringe along the awning
+                    for (let f = -4; f <= 4; f++) addGeo(boxGeo(sx + f * 0.4, sy + 2.1, sz + 1.0, 0.3, 0.22, 0.03), [M.awningA, M.awningB, M.awningC][i]);
                 }
+                brazier(poi.x + 8, poi.z + 2);
+                barrel(poi.x + 4.5, poi.z - 3.2);
+                barrel(poi.x + 5.6, poi.z - 2.7, 0.8);
+                campLantern(poi.x - 13, poi.z - 2);
+                campLantern(poi.x + 12, poi.z - 4);
                 for (let i = 0; i < 8; i++) {
                     const x = poi.x + (rng() - 0.5) * 60;
                     const z = poi.z + (rng() - 0.5) * 60;
@@ -1028,6 +1499,22 @@ export function createWorld(scene, models, opts = {}) {
             const b2 = house(poi.x + 11, poi.z - 9, 9, 6, { rot: 3, wall: M.stone, roofMat: M.roofBrown });
             lootHouse(b2, poi.id, 9, 6);
             flagPole(poi.x + 3, poi.z - 3, 0xdc2626);
+            for (const [bx, bz, col] of [[12, 13, 0xdc2626], [-12, -13, 0x2563eb], [13, -2, 0xfacc15], [-13, 2, 0x16a34a]]) {
+                banner(poi.x + bx, terrainHeight(poi.x + bx, poi.z + bz), poi.z + bz, Math.atan2(-bx, -bz), col, 1.5, 3.4);
+            }
+            for (const sx of [-1, 1]) {
+                for (const sz of [-1, 1]) {
+                    brazier(poi.x + sx * 4.2, poi.z + sz * 15.4);
+                    torch(poi.x + sx * (half - 4.4), terrainHeight(poi.x + sx * (half - 4.4), poi.z + sz * (half - 4.4)), poi.z + sz * (half - 4.4));
+                }
+            }
+            campfire(poi.x + 8, poi.z + 12, { sticks: false });
+            for (let k = 0; k < 4; k++) stump(poi.x + 8 + Math.cos(k * 1.6 + 0.4) * 3.0, poi.z + 12 + Math.sin(k * 1.6 + 0.4) * 3.0, 0.45, 0.36);
+            well(poi.x - 14, poi.z - 6);
+            barrel(poi.x - 4.5, poi.z + 14.5);
+            barrel(poi.x - 3.3, poi.z + 15.2, 0.8);
+            barrel(poi.x - 5.6, poi.z + 15.0, 0.9);
+            woodPile(poi.x + 13, poi.z + 15.5, 0);
             for (let i = 0; i < 6; i++) crate(poi.x + (rng() - 0.5) * 28, poi.z + (rng() - 0.5) * 28);
             scatterAround(poi, 3, 6, half - 3, chestSpots);
             scatterAround(poi, 8, 6, poi.r + 8, floorSpots);
@@ -1099,6 +1586,17 @@ export function createWorld(scene, models, opts = {}) {
             const h = house(poi.x + 9, poi.z + 2, 7, 6, { rot: 1, wall: M.white, roofMat: M.roofBlue });
             lootHouse(h, poi.id, 7, 6, 1);
             boat(poi.x - 14, poi.z + 6, 0.6);
+            lifebuoy(poi.x + 2.55, y + 4.5, poi.z, Math.PI / 2);
+            lifebuoy(poi.x - 2.55, y + 8.5, poi.z, Math.PI / 2);
+            for (let k = 0; k < 4; k++) {
+                const a = k * 1.7 + 0.5;
+                brazier(poi.x + Math.cos(a) * 5.6, poi.z + Math.sin(a) * 5.6);
+            }
+            barrel(poi.x + 13, poi.z + 7.4);
+            barrel(poi.x + 14.2, poi.z + 7.9, 0.8);
+            campLantern(poi.x + 5, poi.z + 8);
+            woodPile(poi.x + 4, poi.z - 8, 0.5);
+            for (let k = 0; k < 5; k++) cairn(poi.x - 10 + k * 1.7, poi.z - 11 + (k % 2) * 1.5, 0.8 + (k % 3) * 0.25);
             scatterAround(poi, 2, 5, poi.r, chestSpots);
             scatterAround(poi, 4, 5, poi.r + 6, floorSpots);
             scatterAround(poi, 2, 5, poi.r, ammoSpots);
@@ -1127,6 +1625,13 @@ export function createWorld(scene, models, opts = {}) {
                 fenceLine(poi.x + Math.cos(a0) * R, poi.z + Math.sin(a0) * R, poi.x + Math.cos(a1) * R, poi.z + Math.sin(a1) * R);
             }
             truck(poi.x - 20, poi.z + 14, 0.4);
+            for (const [dx, dz, ry] of [[-22, -12, 0.6], [24, -18, -0.4], [-6, 24, 0.2]]) if (!blocked(poi.x + dx, poi.z + dz, 2)) scarecrow(poi.x + dx, poi.z + dz, ry);
+            for (const [dx, dz, mat] of [[-26, -20, M.hay], [-26, -2, M.leaf], [26, -4, M.hay], [10, -26, M.leaf]]) if (!blocked(poi.x + dx, poi.z + dz, 5)) cropRows(poi.x + dx, poi.z + dz, 8, 7, mat);
+            if (!blocked(poi.x + 4, poi.z + 15, 2)) well(poi.x + 4, poi.z + 15);
+            barrel(poi.x - 1.6, poi.z - 11.6);
+            barrel(poi.x - 0.5, poi.z - 11.9, 0.8);
+            campLantern(poi.x + 3, poi.z - 14);
+            woodPile(poi.x + 20, poi.z + 4, 1.3);
             scatterAround(poi, 3, 4, poi.r, chestSpots);
             scatterAround(poi, 9, 4, poi.r + 6, floorSpots);
             scatterAround(poi, 5, 4, poi.r, ammoSpots);
@@ -1155,6 +1660,19 @@ export function createWorld(scene, models, opts = {}) {
             const shack = house(poi.x + 9, poi.z + 3, 6, 6, { rot: 1, wall: M.woodDark, roofMat: M.roofGrey });
             lootHouse(shack, poi.id, 6, 6, 1);
             chestSpots.push({ x: poi.x - 4, y, z: poi.z + 5, poi: poi.id });
+            // hikers' camp: a tent, a fire with seats, cairns and a flag
+            const hc = flatSpot(poi.x, poi.z, 10, 24, 6);
+            if (hc) {
+                campfire(hc.x, hc.z, { sticks: false });
+                tent(hc.x + 6, hc.z + 1, Math.atan2(-6, -1), M.fabricRed, true);
+                for (let k = 0; k < 3; k++) stump(hc.x + Math.cos(k * 2.1 + 2.4) * 3.1, hc.z + Math.sin(k * 2.1 + 2.4) * 3.1, 0.45, 0.36);
+                axeStump(hc.x - 2.8, hc.z + 2);
+                flagPole(hc.x - 5, hc.z - 4, 0xf59e0b);
+            }
+            for (let k = 0; k < 6; k++) {
+                const c = flatSpot(poi.x, poi.z, 6, poi.r + 6, 2, 0.5);
+                if (c) cairn(c.x, c.z, 0.9 + rng() * 0.6);
+            }
             scatterAround(poi, 3, 10, poi.r + 20, chestSpots);
             scatterAround(poi, 6, 6, poi.r + 20, floorSpots);
             scatterAround(poi, 3, 6, poi.r + 10, ammoSpots);
@@ -1181,32 +1699,62 @@ export function createWorld(scene, models, opts = {}) {
             }
             chestSpots.push({ x: poi.x - poi.r * 0.95 + 5 * 3.6, y: 1.2, z: poi.z, poi: poi.id });
             for (let k = 0; k < 3; k++) boat(poi.x + (rng() - 0.5) * poi.r, poi.z + (rng() - 0.5) * poi.r * 0.8, rng() * 3);
+            // reeds along the shore, lily pads, a fire with seats and lanterns by the pier
+            for (let k = 0; k < 22; k++) {
+                const a = rng() * Math.PI * 2;
+                const rr = poi.r * (0.72 + rng() * 0.4);
+                const x = poi.x + Math.cos(a) * rr;
+                const z = poi.z + Math.sin(a) * rr;
+                const th = terrainHeight(x, z);
+                if (th > -0.5 && th < 0.9 && !blocked(x, z, 0)) reeds(x, z, 8, 1.8);
+            }
+            lilyPads(poi.x, poi.z, 26, poi.r * 0.8);
+            const lf = flatSpot(poi.x, poi.z, poi.r + 2, poi.r + 14, 6);
+            if (lf) {
+                campfire(lf.x, lf.z, { sticks: true });
+                for (let k = 0; k < 4; k++) stump(lf.x + Math.cos(k * 1.57 + 0.5) * 3.2, lf.z + Math.sin(k * 1.57 + 0.5) * 3.2, 0.45, 0.36);
+            }
+            const pierX = poi.x - poi.r * 0.95 - 2.5;
+            if (!blocked(pierX, poi.z + 2.5, 1)) campLantern(pierX, poi.z + 2.5);
+            if (!blocked(pierX, poi.z - 2.5, 1)) campLantern(pierX, poi.z - 2.5);
             scatterAround(poi, 3, poi.r, poi.r + 14, chestSpots);
             scatterAround(poi, 8, poi.r, poi.r + 16, floorSpots);
             scatterAround(poi, 4, poi.r, poi.r + 14, ammoSpots);
         } else if (poi.kind === 'camp') {
-            // tents around a campfire, picnic tables, a flag
+            // tents (all with their door to the fire) around a campfire with a cooking pot,
+            // log seats, picnic tables, a clothes line, a wood pile, barrels, lanterns and a flag
             const fabrics = [M.fabricOrange, M.fabricGreen, M.fabricBlue, M.fabricRed];
             for (let k = 0; k < 8; k++) {
-                const a = (k / 8) * Math.PI * 2;
-                tent(poi.x + Math.cos(a) * 13, poi.z + Math.sin(a) * 13, -a, fabrics[k % 4]);
+                const a = (k / 8) * Math.PI * 2 + 0.2;
+                const tx = poi.x + Math.cos(a) * 13;
+                const tz = poi.z + Math.sin(a) * 13;
+                tent(tx, tz, Math.atan2(poi.x - tx, poi.z - tz), fabrics[(k + (k >> 2)) % 4], k % 2 === 1);
             }
-            campfire(poi.x, poi.z);
+            campfire(poi.x, poi.z, { pot: true });
             for (let k = 0; k < 4; k++) {
                 const a = (k / 4) * Math.PI * 2 + 0.3;
-                const lx = poi.x + Math.cos(a) * 3.2;
-                const lz = poi.z + Math.sin(a) * 3.2;
+                const lx = poi.x + Math.cos(a) * 3.4;
+                const lz = poi.z + Math.sin(a) * 3.4;
                 const ly = terrainHeight(lx, lz);
                 addGeo(new THREE.CylinderGeometry(0.3, 0.3, 2.2, 8).rotateZ(Math.PI / 2).rotateY(-a + Math.PI / 2).translate(lx, ly + 0.3, lz), M.woodDark);
+                for (const e of [-1.1, 1.1]) {
+                    const ex = lx + Math.cos(-a + Math.PI / 2) * e;
+                    const ez = lz - Math.sin(-a + Math.PI / 2) * e;
+                    addGeo(new THREE.CylinderGeometry(0.24, 0.24, 0.03, 8).rotateZ(Math.PI / 2).rotateY(-a + Math.PI / 2).translate(ex, ly + 0.3, ez), M.woodLight);
+                }
             }
-            for (let k = 0; k < 3; k++) {
-                const x = poi.x - 8 + k * 8;
-                const z = poi.z - 20;
-                const y = terrainHeight(x, z);
-                solid(x, y, z, 2.6, 0.85, 1.2, M.wood);
-                addGeo(boxGeo(x, y + 0.45, z + 1.1, 2.6, 0.1, 0.4), M.woodDark);
-                addGeo(boxGeo(x, y + 0.45, z - 1.1, 2.6, 0.1, 0.4), M.woodDark);
+            for (let k = 0; k < 4; k++) {
+                const a = (k / 4) * Math.PI * 2 + 1.1;
+                stump(poi.x + Math.cos(a) * 5.3, poi.z + Math.sin(a) * 5.3, 0.45 + (k % 2) * 0.12, 0.38);
             }
+            axeStump(poi.x - 2.9, poi.z + 2.6);
+            for (let k = 0; k < 3; k++) picnicTable(poi.x - 8 + k * 8, poi.z - 20);
+            for (const lx of [-12, -4, 4, 12]) campLantern(poi.x + lx, poi.z - 17);
+            clothesLine(poi.x + 17, poi.z + 5, poi.x + 17, poi.z + 16);
+            woodPile(poi.x + 10, poi.z + 24, 0.3);
+            barrel(poi.x + 6, poi.z + 18.5);
+            barrel(poi.x + 7.2, poi.z + 19.2, 0.8);
+            campSign(poi.x - 14, poi.z + 21, -0.5);
             flagPole(poi.x + 6, poi.z + 4, 0x16a34a);
             const cabin = house(poi.x, poi.z + 22, 8, 6, { rot: 2, wall: M.woodDark, roofMat: M.roofGreen });
             lootHouse(cabin, poi.id, 8, 6, 1);
@@ -1218,6 +1766,14 @@ export function createWorld(scene, models, opts = {}) {
             const h = house(poi.x + 6, poi.z - 4, 7, 6, { rot: 1, wall: M.woodDark, roofMat: M.roofBrown });
             lootHouse(h, poi.id, 7, 6, 1);
             campfire(poi.x - 4, poi.z + 4);
+            tent(poi.x - 11, poi.z + 7, Math.atan2(7, -4), M.fabricGreen, true);
+            for (let k = 0; k < 3; k++) {
+                const a = k * 2.1 + 2.5;
+                stump(poi.x - 4 + Math.cos(a) * 3.3, poi.z + 4 + Math.sin(a) * 3.3, 0.45 + (k % 2) * 0.1, 0.36);
+            }
+            woodPile(poi.x + 1, poi.z + 8, 1.2);
+            axeStump(poi.x - 6.4, poi.z + 2.2);
+            campLantern(poi.x + 3, poi.z - 1);
             scatterAround(poi, 5, 4, poi.r, chestSpots);
             scatterAround(poi, 8, 4, poi.r, floorSpots);
             scatterAround(poi, 4, 4, poi.r, ammoSpots);

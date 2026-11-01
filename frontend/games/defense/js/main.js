@@ -295,10 +295,8 @@ function simPlayers() {
 function endMatch(reason = 'book') {
     if (state.mode === 'over') return;
     state.mode = 'over';
-    if (team.on) {
-        if (team.host) net.relay({ t: 'over', w: state.wave });
-        net.send({ type: 'matchOver' });
-    }
+    if (team.on && team.host) net.relay({ t: 'over', w: state.wave });
+    net.send({ type: 'matchOver' }); // (solo matches too, so the party is open for invites again)
     if (document.pointerLockElement) document.exitPointerLock();
     $('pauseScreen').classList.add('hidden');
     $('downScreen').classList.add('hidden');
