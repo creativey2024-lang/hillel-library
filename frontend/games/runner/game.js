@@ -41,9 +41,9 @@ const ROAD_WIDTH = 8.6;
 const SEGMENT_COUNT = 34;         // street segments kept alive (~92 units of street)
 const VIEW_DISTANCE = SEGMENT_COUNT * TILE;
 
-const START_SPEED = 11;           // units / second
-const MAX_SPEED = 25;
-const SPEED_GAIN = 0.22;          // extra speed per second survived
+const START_SPEED = 15;           // units / second
+const MAX_SPEED = 38;
+const SPEED_TIME = 75;            // seconds: the street keeps speeding up, quickly at first
 
 // Jumps use real gravity so you can land on train roofs. Normal jumps clear
 // barriers; with the super-jump shoes you can jump over trucks and up onto trains.
@@ -983,7 +983,7 @@ function update(dt) {
 
     if (running) {
         state.elapsed += dt;
-        state.speed = Math.min(MAX_SPEED, START_SPEED + state.elapsed * SPEED_GAIN);
+        state.speed = START_SPEED + (MAX_SPEED - START_SPEED) * (1 - Math.exp(-state.elapsed / SPEED_TIME));
         const move = state.speed * dt;
         state.distance += move;
         state.score = Math.floor(state.distance) + state.coins * 10;
@@ -1021,7 +1021,8 @@ function update(dt) {
         // sideways movement toward the chosen lane
         const targetX = laneX(player.lane);
         const diff = targetX - player.x;
-        const step = LANE_SWITCH_SPEED * dt;
+        // (quicker side steps when the street is fast)
+        const step = LANE_SWITCH_SPEED * (1 + (state.speed - START_SPEED) / 30) * dt;
         player.x = Math.abs(diff) <= step ? targetX : player.x + Math.sign(diff) * step;
         player.root.rotation.z = THREE.MathUtils.lerp(player.root.rotation.z, -diff * 0.12, 0.25);
 

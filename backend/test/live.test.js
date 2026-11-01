@@ -166,3 +166,40 @@ test('the same user opening the game twice: only the newest one plays', async ()
   assert.ok(replaced);
   second.close();
 });
+
+test('library defense: a party plays the leader\'s game, members are told to switch, start says which game', async () => {
+  const a = await connect('ליאור', 'defense');
+  const b = await connect('נגה', 'arena');
+  const pa = await a.waitFor((m) => m.type === 'party');
+  assert.equal(pa.party.game, 'defense');
+  a.send({ type: 'invite', to: 'נגה' });
+  const inv = await b.waitFor((m) => m.type === 'invite');
+  assert.equal(inv.game, 'defense');
+  b.send({ type: 'accept', partyId: inv.partyId });
+  // the member's arena screen hears that the party plays "defense"
+  const jp = await b.waitFor((m) => m.type === 'joinedParty');
+  assert.equal(jp.game, 'defense');
+  const view = await a.waitFor((m) => m.type === 'party' && m.party.members.length === 2);
+  assert.equal(view.party.members[1].inArena, false); // not on the defense screen yet
+  assert.equal(view.party.members[1].game, 'arena');
+  // ready from the wrong game is refused
+  b.send({ type: 'ready', ready: true });
+  const err = await b.waitFor((m) => m.type === 'error');
+  assert.match(err.error, /משחק אחר/);
+  // the member switches to the defense screen
+  b.close();
+  const b2 = await connect('נגה', 'defense');
+  await a.waitFor((m) => m.type === 'party' && m.party.members.length === 2 && m.party.members[1].inArena);
+  a.send({ type: 'ready', ready: true });
+  b2.send({ type: 'ready', ready: true });
+  const sa = await a.waitFor((m) => m.type === 'start');
+  const sb = await b2.waitFor((m) => m.type === 'start');
+  assert.equal(sa.game, 'defense');
+  assert.equal(sb.host, 'ליאור');
+  // game messages reach the defense screens
+  b2.send({ type: 'net', data: { t: 'hit', id: 3, d: 20 } });
+  const relayed = await a.waitFor((m) => m.type === 'net');
+  assert.deepEqual(relayed.data, { t: 'hit', id: 3, d: 20 });
+  a.close();
+  b2.close();
+});

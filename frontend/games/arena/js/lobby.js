@@ -30,15 +30,16 @@ function radialTexture(stops, size = 256) {
     return t;
 }
 
-function backgroundTexture() {
+function backgroundTexture(colors) {
     const c = document.createElement('canvas');
     c.width = 512;
     c.height = 512;
     const ctx = c.getContext('2d');
     const g = ctx.createRadialGradient(256, 210, 20, 256, 256, 420);
-    g.addColorStop(0, '#2b3f9e');
-    g.addColorStop(0.45, '#17205c');
-    g.addColorStop(1, '#070a1f');
+    const [c0, c1, c2] = colors || ['#2b3f9e', '#17205c', '#070a1f'];
+    g.addColorStop(0, c0);
+    g.addColorStop(0.45, c1);
+    g.addColorStop(1, c2);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 512, 512);
     const t = new THREE.CanvasTexture(c);
@@ -48,9 +49,9 @@ function backgroundTexture() {
 
 const easeOutBack = (t) => 1 + 2.4 * (t - 1) ** 3 + 1.4 * (t - 1) ** 2;
 
-export function createLobby({ renderer, gltf, labels }) {
+export function createLobby({ renderer, gltf, labels, colors = null }) {
     const scene = new THREE.Scene();
-    scene.background = backgroundTexture();
+    scene.background = backgroundTexture(colors);
     const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
 
     scene.add(new THREE.HemisphereLight(0xc7d6ff, 0x1a1440, 1.5));

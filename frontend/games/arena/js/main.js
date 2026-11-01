@@ -19,7 +19,7 @@ import { GLTFLoader } from '../../shared/lib/loaders/GLTFLoader.js';
 import { applySkin, skinFromUrl } from '../../shared/skins.js';
 import { createBridge } from '../../shared/bridge.js';
 import { createWorld, POIS, makeRng } from './world.js';
-import { WEAPONS, RARITIES, AMMO, makeWeapon } from './weapons.js';
+import { WEAPONS, RARITIES, AMMO, makeWeapon, reloadTime, spreadMul, weaponDamage } from './weapons.js';
 import { createActor, refreshWeaponVisual, updateActorVisual, currentWeapon, currentItem, applyDamage, rayHitsActor, playAction } from './actors.js';
 import { createLoot, COIN_VALUE } from './loot.js';
 import { HEALS, isHeal, healSlot, healUseful, applyHeal } from './heals.js';
@@ -531,9 +531,27 @@ function actorState(a) {
 }
 
 // a character run by another computer (a teammate, or a bot when you're not the leader)
-function applyActorState(a, st) {
+// Remote characters are drawn a little in the past (INTERP_MS), smoothly in between the
+// last two updates, instead of chasing a guess - guessing ahead made bots shake when they
+// changed direction. `ts` is the sender's clock; we learn the offset to ours.
+const INTERP_MS = 110;
+const clockOffsets = new Map();
+function localTime(from, ts) {
+    const now = performance.now();
+    if (!Number.isFinite(ts)) return now;
+    const sample = now - ts;
+    let off = clockOffsets.get(from);
+    // the smallest delay seen is the best guess; let it drift up slowly if the network gets slower
+    off = off === undefined || sample < off ? sample : off + (sample - off) * 0.02;
+    clockOffsets.set(from, off);
+    return Math.min(now, ts + off);
+}
+function applyActorState(a, st, at = performance.now()) {
     a.net = a.net || {};
-    Object.assign(a.net, { x: st[0], y: st[1], z: st[2], vx: st[3], vy: st[4], vz: st[5], yaw: st[6], pitch: st[7], at: performance.now() });
+    Object.assign(a.net, { x: st[0], y: st[1], z: st[2], vx: st[3], vy: st[4], vz: st[5], yaw: st[6], pitch: st[7], at });
+    const buf = a.netBuf || (a.netBuf = []);
+    if (!buf.length || at > buf[buf.length - 1].t) buf.push({ t: at, x: st[0], y: st[1], z: st[2], vx: st[3], vy: st[4], vz: st[5], yaw: st[6], pitch: st[7] });
+    if (buf.length > 30) buf.splice(0, buf.length - 30);
     const phase = PHASES[st[8]] || 'ground';
     if (a.phase !== 'ground' && phase === 'ground') a.justLanded = 'hard';
     if (!a.netSeen) {
@@ -568,24 +586,55 @@ function angleLerp(a, b, k) {
     return a + d * k;
 }
 
-// glide smoothly toward the last known position (guessing ahead a little)
+// draw a remote character where it was INTERP_MS ago, in between two updates
 function moveRemote(a, dt) {
     const n = a.net;
     if (!n || !a.netSeen) return;
-    const age = Math.min(0.25, (performance.now() - n.at) / 1000);
-    const tx = n.x + n.vx * age;
-    const ty = n.y + n.vy * age;
-    const tz = n.z + n.vz * age;
-    const k = Math.min(1, dt * 12);
-    if (Math.abs(tx - a.pos.x) + Math.abs(tz - a.pos.z) > 15) a.pos.set(tx, ty, tz);
+    const buf = a.netBuf;
+    let x = n.x;
+    let y = n.y;
+    let z = n.z;
+    let ry = n.yaw;
+    let rp = n.pitch;
+    if (buf && buf.length) {
+        const rt = performance.now() - INTERP_MS;
+        while (buf.length > 2 && buf[1].t <= rt) buf.shift();
+        const s0 = buf[0];
+        const s1 = buf[1];
+        if (s1 && rt >= s0.t) {
+            const k = Math.min(1, (rt - s0.t) / Math.max(1, s1.t - s0.t));
+            x = s0.x + (s1.x - s0.x) * k;
+            y = s0.y + (s1.y - s0.y) * k;
+            z = s0.z + (s1.z - s0.z) * k;
+            ry = angleLerp(s0.yaw, s1.yaw, k);
+            rp = s0.pitch + (s1.pitch - s0.pitch) * k;
+        } else if (!s1) {
+            // updates are late: carry on a little in the same direction, then wait
+            const age = Math.max(0, Math.min(0.2, (rt - s0.t) / 1000));
+            x = s0.x + s0.vx * age;
+            y = s0.y + s0.vy * age;
+            z = s0.z + s0.vz * age;
+            ry = s0.yaw;
+            rp = s0.pitch;
+        } else {
+            x = s0.x;
+            y = s0.y;
+            z = s0.z;
+            ry = s0.yaw;
+            rp = s0.pitch;
+        }
+    }
+    if (Math.abs(x - a.pos.x) + Math.abs(z - a.pos.z) > 15) a.pos.set(x, y, z);
     else {
-        a.pos.x += (tx - a.pos.x) * k;
-        a.pos.y += (ty - a.pos.y) * k;
-        a.pos.z += (tz - a.pos.z) * k;
+        // a last light smoothing step for the odd late update
+        const k = Math.min(1, dt * 25);
+        a.pos.x += (x - a.pos.x) * k;
+        a.pos.y += (y - a.pos.y) * k;
+        a.pos.z += (z - a.pos.z) * k;
     }
     a.vel.set(n.vx, n.vy, n.vz);
-    a.yaw = angleLerp(a.yaw, n.yaw, k);
-    a.pitch += (n.pitch - a.pitch) * k;
+    a.yaw = angleLerp(a.yaw, ry, Math.min(1, dt * 25));
+    a.pitch += (rp - a.pitch) * Math.min(1, dt * 25);
     if (a.phase !== 'ground' || !a.onGround) playAction(a, 'jump', 0.15);
     else if (a.moving) {
         playAction(a, 'walk', 0.12);
@@ -640,13 +689,13 @@ function teamTick(dt) {
     team.sendT -= dt;
     if (team.sendT <= 0) {
         team.sendT = 1 / 15;
-        if (player.alive) net.relay({ t: 'p', s: actorState(player), sh: team.shots.splice(0, 12), inv: inventoryState(player) });
+        if (player.alive) net.relay({ t: 'p', ts: Math.round(performance.now()), s: actorState(player), sh: team.shots.splice(0, 12), inv: inventoryState(player) });
     }
     if (team.host) {
         team.snapT -= dt;
         if (team.snapT <= 0) {
             team.snapT = 1 / 12;
-            net.relay({ t: 's', b: bots.map((b) => (b.alive ? actorState(b) : 0)), st: storm.snapshot(), sh: team.botShots.splice(0, 40) });
+            net.relay({ t: 's', ts: Math.round(performance.now()), b: bots.map((b) => (b.alive ? actorState(b) : 0)), st: storm.snapshot(), sh: team.botShots.splice(0, 40) });
         }
     }
     const ev = team.ev;
@@ -663,16 +712,17 @@ function onTeamMessage(from, d) {
         case 'p': {
             const r = team.remotes.get(from);
             if (!r || !r.alive) return;
-            applyActorState(r, d.s);
+            applyActorState(r, d.s, localTime(from, d.ts));
             if (d.inv) applyInventory(r, d.inv);
             if (d.sh && d.sh.length) remoteShot(r, d.sh);
             return;
         }
         case 's': {
             if (from !== team.hostName) return;
+            const at = localTime(from, d.ts);
             d.b.forEach((st, i) => {
                 const b = bots[i];
-                if (b && st && b.alive) applyActorState(b, st);
+                if (b && st && b.alive) applyActorState(b, st, at);
             });
             if (d.st) storm.applySnapshot(d.st);
             (d.sh || []).forEach(([i, x, y, z]) => remoteShot(bots[i], [[x, y, z]]));
@@ -882,7 +932,8 @@ window.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('mousemove', (e) => {
     if (!locked() || state.mode !== 'playing') return;
     // slower turning when zoomed in, so the scope is steady
-    const sens = 0.0022 * (scopeOn() ? (WEAPONS[currentWeapon(player).kind].zoom || 16) / 64 : player.aiming ? 0.6 : 1);
+    let sens = 0.0022 * (scopeOn() ? (WEAPONS[currentWeapon(player).kind].zoom || 16) / 64 : player.aiming ? 0.6 : 1);
+    if (state.stickyAim) sens *= 0.72; // a bit of "stickiness" over an enemy makes tracking easier
     yaw -= e.movementX * sens;
     pitch -= e.movementY * sens;
     pitch = Math.max(-1.25, Math.min(1.1, pitch));
@@ -967,7 +1018,7 @@ function interact() {
         return;
     }
     const it = near.obj;
-    const label = it.type === 'heal' ? `${HEALS[it.heal].name} ×${it.count}` : `${WEAPONS[it.weapon.kind].name} ${RARITIES[it.weapon.rarity].name}`;
+    const label = it.type === 'heal' ? `${HEALS[it.heal].name} ×${it.count}` : `${WEAPONS[it.weapon.kind].name} ${RARITIES[it.weapon.rarity].name} · נזק ${Math.round(weaponDamage(it.weapon) * WEAPONS[it.weapon.kind].pellets)}`;
     const slot = loot.takeWeapon(player, it, player.current);
     if (slot >= 0 && slot !== player.current) selectSlot(slot);
     player.using = null;
@@ -1171,6 +1222,15 @@ function renderLobby() {
     }
     const bots = BOT_COUNT + 4 * (n - 1);
     $('readyHint').innerHTML = `${hint}${hint ? ' · ' : ''}${bots} בוטים`;
+    // the party plays the other team game: offer to go there
+    const sw = $('switchGame');
+    if (sw) {
+        if (party && party.game && party.game !== 'arena') {
+            sw.textContent = 'הקבוצה שלך בהגנה על הספרייה - לעבור לשם ↩';
+            sw.classList.remove('hidden');
+            btn.disabled = true;
+        } else sw.classList.add('hidden');
+    }
     const note = $('netNote');
     if (net.replaced) {
         note.textContent = 'המשחק נפתח בחלון אחר עם אותו משתמש - אפשר לשחק רק באחד';
@@ -1202,7 +1262,7 @@ function showInvite(msg) {
     const card = document.createElement('div');
     card.className = 'lb-inv';
     card.innerHTML = `<span class="av" style="background:${avatarColor(msg.from)}">${esc(msg.from.charAt(0))}</span>`
-        + `<div class="tx"><b>${esc(msg.from)}</b>מזמין/ה אותך לשחק יחד (${msg.size}/4)</div>`
+        + `<div class="tx"><b>${esc(msg.from)}</b>${msg.game === 'defense' ? 'מזמין/ה אותך להגנה על הספרייה' : 'מזמין/ה אותך לשחק יחד'} (${msg.size}/4)</div>`
         + '<div class="bt"><button class="yes" type="button">הצטרפות</button><button class="no" type="button">לא עכשיו</button></div><i class="timer"></i>';
     const done = () => {
         card.remove();
@@ -1240,12 +1300,21 @@ function setupLobby() {
         }
     });
     net.on('declined', (m) => toast(`<b>${esc(m.username)}</b> לא יכול/ה עכשיו`));
+    // joined a party that plays the other team game: go there
+    const goToGame = (game) => { window.location.href = `../${game === 'defense' ? 'defense' : 'arena'}/index.html${window.location.search}`; };
+    net.on('joinedParty', (m) => {
+        if (m.game && m.game !== 'arena' && state.mode === 'ready') goToGame(m.game);
+    });
+    if ($('switchGame')) $('switchGame').addEventListener('click', () => { if (net.party && net.party.game) goToGame(net.party.game); });
     net.on('error', (m) => toast(esc(m.error)));
     net.on('left', (m) => {
         if (state.mode === 'playing') teammateLeft(m.username);
         else if (!m.game) toast(`<b>${esc(m.username)}</b> יצא/ה מהקבוצה`);
     });
-    net.on('start', (m) => startMatch({ seed: m.seed, host: m.host, members: m.members, bots: m.bots, me: net.me }));
+    net.on('start', (m) => {
+        if (m.game && m.game !== 'arena') return;
+        startMatch({ seed: m.seed, host: m.host, members: m.members, bots: m.bots, me: net.me });
+    });
     net.on('net', (m) => onTeamMessage(m.from, m.data));
 
     $('inviteForm').addEventListener('submit', (e) => {
@@ -1291,6 +1360,7 @@ const camRight = new THREE.Vector3();
 const pivot = new THREE.Vector3();
 const desiredCam = new THREE.Vector3();
 let camDist = 3.6;
+let camFree = 3.6;
 let fov = 70;
 
 function scopeOn() {
@@ -1299,6 +1369,7 @@ function scopeOn() {
 }
 
 function updatePlayer(dt) {
+    state.stickyAim = enemyUnderCrosshair();
     // aim with the right mouse button (on foot, with a gun)
     const w = currentWeapon(player);
     player.aiming = mouse.right && player.phase === 'ground' && Boolean(w) && player.alive;
@@ -1396,16 +1467,55 @@ function updatePlayer(dt) {
 }
 
 const aimDir = new THREE.Vector3();
+const tmpA = new THREE.Vector3();
+const tmpB = new THREE.Vector3();
+// is an enemy under the crosshair right now? (mouse turns a little slower over them)
+function enemyUnderCrosshair() {
+    if (!player || !player.alive || player.phase !== 'ground') return false;
+    camera.getWorldDirection(tmpB);
+    for (const a of actors) {
+        if (a === player || !a.alive || (player.team && a.team === player.team)) continue;
+        if (a.pos.distanceToSquared(player.pos) > 140 * 140) continue;
+        if (rayHitsActor(a, camera.position, tmpB, 140)) return true;
+    }
+    return false;
+}
 function shootFromCamera() {
     // what's under the crosshair?
     camera.getWorldDirection(camForward);
     let dist = world.raycast(camera.position, camForward, 400);
+    let crosshairEnemy = null;
     for (const a of actors) {
         if (a === player || !a.alive) continue;
         const h = rayHitsActor(a, camera.position, camForward, dist);
-        if (h) dist = h.dist;
+        if (h) {
+            dist = h.dist;
+            crosshairEnemy = a;
+        }
     }
-    const aimPoint = tmpV.copy(camera.position).addScaledVector(camForward, dist);
+    // light aim assist: a near miss right next to an enemy is pulled onto them
+    // (only when nothing else is under the crosshair and the enemy is in view)
+    let assisted = null;
+    if (!crosshairEnemy) {
+        let bestAng = 0;
+        for (const a of actors) {
+            if (a === player || !a.alive || a.phase !== 'ground' || (player.team && a.team === player.team)) continue;
+            const c = tmpA.copy(a.pos);
+            c.y += 1.0;
+            const to = tmpB.subVectors(c, camera.position);
+            const d = to.length();
+            if (d < 2 || d > 120) continue;
+            to.divideScalar(d);
+            const ang = Math.acos(Math.min(1, to.dot(camForward)));
+            // about a body width around them, a bit more when close
+            const limit = Math.min(0.06, 0.75 / d + 0.008) * (player.aiming ? 1.15 : 1);
+            if (ang > limit || (assisted && ang > bestAng)) continue;
+            if (!world.lineOfSight(camera.position, c, true)) continue;
+            assisted = a;
+            bestAng = ang;
+        }
+    }
+    const aimPoint = assisted ? tmpV.copy(assisted.pos).setY(assisted.pos.y + 1.0) : tmpV.copy(camera.position).addScaledVector(camForward, dist);
     // the bullet starts at the player's chest and goes to that point
     const origin = player.pos.clone();
     origin.y += 1.35;
@@ -1449,8 +1559,10 @@ function updateCamera(dt) {
     tmpV.subVectors(desiredCam, pivot);
     const want = tmpV.length();
     tmpV.normalize();
-    const free = world.raycast(pivot, tmpV, want);
-    camera.position.copy(pivot).addScaledVector(tmpV, Math.max(0.4, free - 0.3));
+    const free = Math.max(0.4, world.raycast(pivot, tmpV, want) - 0.3);
+    // pull in quickly when something gets in the way, ease back out slowly (no shaking near walls and trees)
+    camFree = free < camFree ? THREE.MathUtils.lerp(camFree, free, Math.min(1, dt * 30)) : THREE.MathUtils.lerp(camFree, free, Math.min(1, dt * 5));
+    camera.position.copy(pivot).addScaledVector(tmpV, Math.min(camFree, want));
     if (scope) camera.position.copy(player.pos).add(new THREE.Vector3(0, 1.55, 0)).addScaledVector(camForward, 0.3);
     camera.lookAt(tmpV.copy(camera.position).add(camForward));
     player.root.visible = !scope;
@@ -1527,13 +1639,13 @@ function updateHud(dt) {
     }
     const w = currentWeapon(player);
     const def = w ? WEAPONS[w.kind] : null;
-    let spread = def ? (player.aiming ? def.adsSpread : def.spread) : 0;
+    let spread = def ? (player.aiming ? def.adsSpread : def.spread) * spreadMul(w) : 0;
     if (player.moving) spread *= 1.4;
     if (!player.onGround) spread *= 1.8;
     const px = def ? Math.min(60, (spread / Math.tan((camera.fov * Math.PI) / 360)) * (window.innerHeight / 2)) + 3 : 8;
     hud.crosshair(player.phase === 'ground' && w ? w.kind : null, player.aiming, px);
     if (player.using) hud.progress(player.using.t / player.using.total, HEALS[player.using.heal].name);
-    else if (player.reloadT > 0 && w) hud.progress(1 - player.reloadT / WEAPONS[w.kind].reload, 'טוען...');
+    else if (player.reloadT > 0 && w) hud.progress(1 - player.reloadT / reloadTime(w), 'טוען...');
     else hud.progress(null);
     hud.updateNumbers(dt, camera, window.innerWidth, window.innerHeight);
     // wind streaks while dropping fast

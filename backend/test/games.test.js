@@ -237,9 +237,14 @@ test('best scores are kept per user (not per computer), and only believed up to 
   assert.equal(r.data.best.arena, 0);
   r = await run('arena', 300, { coins: 100, won: true });
   assert.equal(r.data.best.arena, 1);
+  // library defense: the best wave, but only as many waves as the time allows
+  r = await run('defense', 30, { coins: 10, score: 50 });
+  assert.equal(r.data.best.defense, economy.allowedWaveForRun(30));
+  r = await run('defense', 600, { coins: 10, score: 9 });
+  assert.equal(r.data.best.defense, 9);
   // the profile shows them (so any computer the user logs in from sees the same)
   const prof = await c.get('/api/games/profile');
-  assert.deepEqual(prof.data.best, { runner: 1500, jumper: economy.allowedScoreForRun(10), arena: 1 });
+  assert.deepEqual(prof.data.best, { runner: 1500, jumper: economy.allowedScoreForRun(10), arena: 1, defense: 9 });
   // and other users have their own
   const other = await login('יאשה');
   assert.equal((await other.get('/api/games/profile')).data.best.runner, 0);

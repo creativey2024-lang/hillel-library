@@ -430,3 +430,6 @@ html, body {
     .lb-plate { font-size: 12px; padding: 4px 10px 4px 8px; }
     .lb-incoming, .toasts { top: 58px; }
 }
+
+/* the party plays the other team game: a button to go there */
+.lb-switch { margin-top: 2px; background: #7c3aed; color: #fff; font-weight: 800; border: 0; border-radius: 999px; padding: 7px 16px; cursor: pointer; font-family: inherit; box-shadow: 0 6px 18px rgba(124, 58, 237, 0.4); }

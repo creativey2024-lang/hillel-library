@@ -928,6 +928,14 @@
             iconClass: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',
             bestKey: 'hillel_arena_best',
         },
+        defense: {
+            url: '/games/defense/index.html',
+            title: 'הגנה על הספרייה',
+            subtitle: 'WASD תנועה · עכבר כיוון וירי · E חנויות ואיסוף · G רימון · Esc הפסקה',
+            icon: 'fa-book-open',
+            iconClass: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
+            bestKey: 'hillel_defense_best',
+        },
     };
     const PICKER_HEADER = {
         title: 'בחרו משחק',
@@ -1007,7 +1015,7 @@
         frame.focus();
     }
 
-    // --- The island game: a friend's invite while you're anywhere on the site ---
+    // --- The team games: a friend's invite while you're anywhere on the site ---
     // (a small live connection to the server; the game itself shows invites while it's open)
     let liveSocket = null;
     let liveRetries = 0;
@@ -1047,8 +1055,10 @@
 
     const shownInvites = new Set();
     function showGameInvite(msg) {
-        const arenaOpen = currentGame === 'arena' && !document.getElementById('gameModal').classList.contains('hidden');
-        if (arenaOpen || shownInvites.has(msg.partyId)) return;
+        // (an open team game shows its own invites)
+        const gameOpen = (currentGame === 'arena' || currentGame === 'defense') && !document.getElementById('gameModal').classList.contains('hidden');
+        if (gameOpen || shownInvites.has(msg.partyId)) return;
+        const inviteGame = msg.game === 'defense' ? 'defense' : 'arena';
         shownInvites.add(msg.partyId);
         const box = document.createElement('div');
         box.setAttribute('role', 'alert');
@@ -1056,7 +1066,7 @@
             + 'background:linear-gradient(120deg,#7c3aed,#2563eb);box-shadow:0 14px 34px rgba(15,23,42,.35);font-size:14px;';
         box.className = 'anim-modal-in';
         const name = escapeHtml(msg.from);
-        box.innerHTML = `<div style="font-weight:800;margin-bottom:4px">🎮 הזמנה לקרב באי</div>`
+        box.innerHTML = `<div style="font-weight:800;margin-bottom:4px">🎮 הזמנה ל${GAMES[inviteGame].title}</div>`
             + `<div style="opacity:.95">${name} מזמין/ה אותך לשחק איתו/ה בקבוצה (${msg.size}/4)</div>`
             + '<div style="display:flex;gap:8px;margin-top:10px">'
             + '<button type="button" data-yes style="flex:1;background:#facc15;color:#422006;font-weight:800;border-radius:9px;padding:7px 10px">הצטרפות</button>'
@@ -1069,7 +1079,7 @@
             if (liveSocket) liveSocket.send(JSON.stringify({ type: 'accept', partyId: msg.partyId }));
             close();
             openGameModal();
-            startGame('arena');
+            startGame(inviteGame);
         });
         box.querySelector('[data-no]').addEventListener('click', () => {
             if (liveSocket) liveSocket.send(JSON.stringify({ type: 'decline', partyId: msg.partyId }));

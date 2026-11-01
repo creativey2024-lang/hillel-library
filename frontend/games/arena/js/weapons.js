@@ -6,12 +6,14 @@ import * as THREE from 'three';
 import { mergeGeometries } from '../../shared/lib/utils/BufferGeometryUtils.js';
 import { texture } from './textures.js';
 
+// each step up is a real upgrade: more damage, tighter spread, faster reload,
+// and from epic up a bigger magazine and a faster trigger
 export const RARITIES = [
-    { id: 'common', name: 'רגיל', color: '#9ca3af', hex: 0x9ca3af, mult: 1.0, weight: 32 },
-    { id: 'uncommon', name: 'לא נפוץ', color: '#22c55e', hex: 0x22c55e, mult: 1.06, weight: 30 },
-    { id: 'rare', name: 'נדיר', color: '#3b82f6', hex: 0x3b82f6, mult: 1.12, weight: 21 },
-    { id: 'epic', name: 'אפי', color: '#a855f7', hex: 0xa855f7, mult: 1.19, weight: 12 },
-    { id: 'legendary', name: 'אגדי', color: '#f59e0b', hex: 0xf59e0b, mult: 1.27, weight: 5 },
+    { id: 'common', name: 'רגיל', color: '#9ca3af', hex: 0x9ca3af, mult: 1.0, spread: 1.0, reload: 1.0, mag: 1.0, rate: 1.0, weight: 32 },
+    { id: 'uncommon', name: 'לא נפוץ', color: '#22c55e', hex: 0x22c55e, mult: 1.1, spread: 0.94, reload: 0.95, mag: 1.0, rate: 1.0, weight: 30 },
+    { id: 'rare', name: 'נדיר', color: '#3b82f6', hex: 0x3b82f6, mult: 1.22, spread: 0.86, reload: 0.88, mag: 1.0, rate: 1.04, weight: 21 },
+    { id: 'epic', name: 'אפי', color: '#a855f7', hex: 0xa855f7, mult: 1.36, spread: 0.76, reload: 0.8, mag: 1.2, rate: 1.08, weight: 12 },
+    { id: 'legendary', name: 'אגדי', color: '#f59e0b', hex: 0xf59e0b, mult: 1.58, spread: 0.62, reload: 0.68, mag: 1.4, rate: 1.16, weight: 5 },
 ];
 
 // damage: per bullet (shotgun: per pellet); rate: shots per second; spread: radians
@@ -24,6 +26,11 @@ export const WEAPONS = {
     sniper: { name: 'רובה צלפים', ammo: 'heavy', damage: 100, rate: 0.4, mag: 1, reload: 2.6, spread: 0.08, adsSpread: 0.0008, range: 400, pellets: 1, auto: false, sound: 'sniper', pitch: 1, recoil: 0.08, scope: true, zoom: 16, head: 2.5 },
     dmr: { name: 'צלפים חצי־אוטומטי', ammo: 'medium', damage: 48, rate: 2.2, mag: 10, reload: 2.4, spread: 0.05, adsSpread: 0.0025, range: 300, pellets: 1, auto: false, sound: 'sniper', pitch: 1.3, recoil: 0.03, scope: true, zoom: 26, head: 2.0 },
     heavy: { name: 'צלפים כבד', ammo: 'heavy', damage: 140, rate: 0.3, mag: 1, reload: 3.4, spread: 0.09, adsSpread: 0.0006, range: 450, pellets: 1, auto: false, sound: 'sniper', pitch: 0.75, recoil: 0.11, scope: true, zoom: 13, head: 2.5 },
+    // special weapons (only in "הגנה על הספרייה")
+    minigun: { name: 'מיניגאן', ammo: 'medium', damage: 15, rate: 16, mag: 120, reload: 3.6, spread: 0.06, adsSpread: 0.045, range: 120, pellets: 1, auto: true, sound: 'repeater', pitch: 1.5, recoil: 0.004, special: 'spin' },
+    rocket: { name: 'מטול רקטות', ammo: 'rockets', damage: 150, rate: 0.9, mag: 4, reload: 2.8, spread: 0.01, adsSpread: 0.004, range: 200, pellets: 1, auto: false, sound: 'shotgun', pitch: 0.6, recoil: 0.06, special: 'rocket', blast: 5 },
+    freeze: { name: 'רובה קרח', ammo: 'energy', damage: 20, rate: 7, mag: 40, reload: 2.2, spread: 0.02, adsSpread: 0.01, range: 70, pellets: 1, auto: true, sound: 'blaster', pitch: 1.8, recoil: 0.006, special: 'freeze' },
+    lightning: { name: 'מקל ברקים', ammo: 'energy', damage: 55, rate: 2.4, mag: 16, reload: 2.4, spread: 0.0, adsSpread: 0.0, range: 60, pellets: 1, auto: true, sound: 'blaster', pitch: 0.5, recoil: 0.02, special: 'chain', chain: 4 },
 };
 
 export const AMMO = {
@@ -31,6 +38,8 @@ export const AMMO = {
     medium: { name: 'קליעים בינוניים', color: '#16a34a', box: 30 },
     shells: { name: 'כדוריות', color: '#dc2626', box: 8 },
     heavy: { name: 'קליעים כבדים', color: '#2563eb', box: 4 },
+    rockets: { name: 'רקטות', color: '#f97316', box: 3 },
+    energy: { name: 'אנרגיה', color: '#22d3ee', box: 24 },
 };
 
 export function rollRarity(rng = Math.random, bonus = 0) {
@@ -56,12 +65,26 @@ export function rollWeaponKind(rng = Math.random) {
 }
 
 export function makeWeapon(kind, rarity) {
-    const def = WEAPONS[kind];
-    return { kind, rarity, ammoInMag: def.mag };
+    return { kind, rarity, ammoInMag: magSize({ kind, rarity }) };
 }
 
+const rar = (w) => RARITIES[w.rarity] || RARITIES[0];
 export function weaponDamage(w) {
-    return WEAPONS[w.kind].damage * RARITIES[w.rarity].mult;
+    return WEAPONS[w.kind].damage * rar(w).mult;
+}
+// single-shot guns (sniper) keep their one round
+export function magSize(w) {
+    const m = WEAPONS[w.kind].mag;
+    return m <= 1 ? m : Math.round(m * rar(w).mag);
+}
+export function reloadTime(w) {
+    return WEAPONS[w.kind].reload * rar(w).reload;
+}
+export function fireRate(w) {
+    return WEAPONS[w.kind].rate * rar(w).rate;
+}
+export function spreadMul(w) {
+    return rar(w).spread;
 }
 
 // --------------------------------------------------------------- models
@@ -209,6 +232,49 @@ function buildWeaponMesh(kind, rarity) {
         box(m.poly, 0.1, 0.06, 0.18, 0, 0.17, -0.3);
         box(m.poly, 0.1, 0.22, 0.05, 0, 0.04, -0.5);
         trigger(0.08);
+    } else if (kind === 'minigun') {
+        box(m.metal, 0.2, 0.2, 0.42, 0, 0.1, 0.05);              // body
+        box(A, 0.21, 0.06, 0.3, 0, 0.21, 0.05);
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2;
+            tubeZ(m.steel, 0.022, 0.8, Math.cos(a) * 0.07, 0.1 + Math.sin(a) * 0.07, 0.62, 8);
+        }
+        tubeZ(m.metal, 0.11, 0.06, 0, 0.1, 0.42, 12);
+        tubeZ(m.metal, 0.11, 0.06, 0, 0.1, 0.98, 12);
+        box(m.poly, 0.16, 0.2, 0.16, 0, -0.12, 0.05);             // ammo box
+        box(A, 0.17, 0.04, 0.17, 0, -0.03, 0.05);
+        box(m.metal, 0.04, 0.16, 0.04, 0, 0.27, -0.05);           // carry handle
+        box(m.metal, 0.04, 0.04, 0.3, 0, 0.35, 0.05);
+        grip(-0.3);
+        trigger(0.06);
+    } else if (kind === 'rocket') {
+        tubeZ(m.metal, 0.11, 1.2, 0, 0.16, 0.25, 14);             // the tube
+        tubeZ(A, 0.125, 0.12, 0, 0.16, 0.8, 14);
+        tubeZ(A, 0.125, 0.1, 0, 0.16, -0.3, 14);
+        tubeZ(m.poly, 0.09, 0.02, 0, 0.16, 0.86, 14);
+        add(new THREE.ConeGeometry(0.08, 0.2, 10).rotateX(Math.PI / 2).translate(0, 0.16, 0.92), m.red); // the rocket's nose
+        box(m.poly, 0.06, 0.12, 0.14, 0.13, 0.26, 0.2);           // sight
+        tubeZ(m.lens, 0.03, 0.01, 0.13, 0.28, 0.28);
+        box(m.poly, 0.07, 0.15, 0.07, 0, -0.02, 0.35);            // front grip
+        grip(-0.25);
+        trigger(0.07);
+    } else if (kind === 'freeze') {
+        box(m.steel, 0.14, 0.16, 0.5, 0, 0.1, 0.12);
+        tubeZ(m.lens, 0.05, 0.4, 0, 0.12, 0.55, 10);              // the glowing coil
+        for (let i = 0; i < 5; i++) ring(A, 0.07, 0.015, 0, 0.12, 0.4 + i * 0.07);
+        tubeZ(m.metal, 0.06, 0.08, 0, 0.12, 0.8, 10);
+        add(new THREE.OctahedronGeometry(0.07, 0).translate(0, 0.27, 0.05), m.lens); // crystal on top
+        box(m.metal, 0.05, 0.08, 0.05, 0, 0.2, 0.05);
+        box(m.poly, 0.08, 0.2, 0.2, 0, 0.02, -0.25);
+        grip(-0.3);
+        trigger(0.07);
+    } else if (kind === 'lightning') {
+        // a staff with a crystal and copper rings
+        add(new THREE.CylinderGeometry(0.03, 0.035, 1.5, 8).rotateX(Math.PI / 2).translate(0, 0.08, 0.3), m.wood);
+        for (let i = 0; i < 3; i++) ring(A, 0.045, 0.012, 0, 0.08, 0.6 + i * 0.08);
+        add(new THREE.OctahedronGeometry(0.11, 0).scale(1, 1, 1.6).translate(0, 0.08, 1.12), m.lens);
+        add(new THREE.TorusGeometry(0.13, 0.012, 6, 16).translate(0, 0.08, 1.12), A);
+        grip(-0.1);
     } else {
         // heavy sniper
         box(m.metal, 0.15, 0.19, 0.8, 0, 0.11, 0.25);
@@ -238,5 +304,5 @@ function buildWeaponMesh(kind, rarity) {
 
 /** Where bullets come out, in the gun's own space. */
 export function muzzleOffset(kind) {
-    return { pistol: 0.42, smg: 0.68, ar: 1.05, shotgun: 1.03, sniper: 1.42, dmr: 1.1, heavy: 1.72 }[kind];
+    return { pistol: 0.42, smg: 0.68, ar: 1.05, shotgun: 1.03, sniper: 1.42, dmr: 1.1, heavy: 1.72, minigun: 1.02, rocket: 0.9, freeze: 0.84, lightning: 1.22 }[kind];
 }

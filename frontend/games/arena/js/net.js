@@ -3,7 +3,7 @@
  * invites, ready, and the messages of a team match. If there is no server
  * (or you're not logged in) the game simply stays in solo mode.
  */
-export function createNet() {
+export function createNet({ where = 'arena' } = {}) {
     const listeners = {};
     const net = {
         status: 'off', // off | connecting | online | offline
@@ -58,7 +58,7 @@ export function createNet() {
                 // storage blocked: the site's cookie is used
             }
             if (token) ws.send(JSON.stringify({ type: 'auth', token }));
-            ws.send(JSON.stringify({ type: 'hello', where: 'arena', skin: net.skin }));
+            ws.send(JSON.stringify({ type: 'hello', where, skin: net.skin }));
         };
         ws.onmessage = (e) => {
             let msg;

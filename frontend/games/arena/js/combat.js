@@ -4,11 +4,11 @@
  * (tracers, muzzle flashes, impact puffs).
  */
 import * as THREE from 'three';
-import { WEAPONS, weaponDamage, muzzleOffset } from './weapons.js';
+import { WEAPONS, weaponDamage, muzzleOffset, magSize, reloadTime, fireRate, spreadMul } from './weapons.js';
 import { currentWeapon, applyDamage, rayHitsActor, EYE_HEIGHT } from './actors.js';
 
 // bots are a bit softer on you than on each other, so a good player can win
-export const BOT_DAMAGE_TO_PLAYER = 0.72;
+export const BOT_DAMAGE_TO_PLAYER = 0.6;
 // bot-vs-bot fights last longer, so the match isn't over before you get there
 export const BOT_DAMAGE_TO_BOT = 0.33;
 
@@ -177,8 +177,8 @@ export function startReload(actor) {
     const w = currentWeapon(actor);
     if (!w || actor.reloadT > 0) return false;
     const def = WEAPONS[w.kind];
-    if (w.ammoInMag >= def.mag || actor.ammo[def.ammo] <= 0) return false;
-    actor.reloadT = def.reload;
+    if (w.ammoInMag >= magSize(w) || actor.ammo[def.ammo] <= 0) return false;
+    actor.reloadT = reloadTime(w);
     actor.using = null;
     return true;
 }
@@ -193,7 +193,7 @@ export function tickWeapon(actor, dt) {
             const w = currentWeapon(actor);
             if (w) {
                 const def = WEAPONS[w.kind];
-                const need = def.mag - w.ammoInMag;
+                const need = magSize(w) - w.ammoInMag;
                 const take = Math.min(need, actor.ammo[def.ammo]);
                 w.ammoInMag += take;
                 actor.ammo[def.ammo] -= take;
@@ -216,10 +216,10 @@ export function fire(actor, origin, dir, ctx) {
         return false;
     }
     w.ammoInMag -= 1;
-    actor.cooldown = 1 / def.rate;
+    actor.cooldown = 1 / fireRate(w);
     if (actor.fx) actor.fx.recoil = Math.min(1, 0.55 + def.recoil * 9);
 
-    let spread = actor.aiming ? def.adsSpread : def.spread;
+    let spread = (actor.aiming ? def.adsSpread : def.spread) * spreadMul(w);
     if (actor.moving) spread *= 1.4;
     if (!actor.onGround) spread *= 1.8;
 

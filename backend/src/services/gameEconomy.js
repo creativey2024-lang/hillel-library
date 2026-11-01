@@ -33,7 +33,7 @@ const SHOP_ITEMS = [
   },
 ];
 
-const GAME_IDS = ['runner', 'jumper', 'arena'];
+const GAME_IDS = ['runner', 'jumper', 'arena', 'defense'];
 
 // Anti-cheat limit: a run's coins are only accepted if they are possible in
 // the time the SERVER measured between "run started" and "run finished".
@@ -44,8 +44,11 @@ const MAX_RUN_SECONDS = 30 * 60;  // a run left open longer than this counts as 
 
 // Best scores are kept per user (not per computer). A score is only believed
 // up to what's possible in the run's real length: runner/jumper score is
-// distance (at most ~25 units/s) + 10 per coin (at most 8 coins/s).
-const MAX_SCORE_PER_SECOND = 110;
+// distance (at most ~38 units/s) + 10 per coin (at most 8 coins/s).
+const MAX_SCORE_PER_SECOND = 130;
+// library defense: the best wave reached. A wave takes at least this long.
+const MIN_WAVE_SECONDS = 12;
+const MAX_DEFENSE_WAVE = 999;
 const SCORE_BASE_ALLOWANCE = 50;
 // an island-battle win counts only if the match lasted at least this long
 const MIN_WIN_SECONDS = 60;
@@ -82,6 +85,7 @@ function normalizeProfile(raw) {
     bestRunner: toInt(r.bestRunner),
     bestJumper: toInt(r.bestJumper),
     arenaWins: toInt(r.arenaWins),
+    bestDefense: toInt(r.bestDefense),
   };
 }
 
@@ -95,6 +99,7 @@ function serializeProfile(profile) {
     bestRunner: profile.bestRunner || 0,
     bestJumper: profile.bestJumper || 0,
     arenaWins: profile.arenaWins || 0,
+    bestDefense: profile.bestDefense || 0,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -114,6 +119,12 @@ function allowedScoreForRun(elapsedSeconds) {
 // Works out how many of the claimed coins are credited (and the new best
 // score), and returns the updated profile. Never trusts the claim beyond
 // what the run's real length allows.
+function allowedWaveForRun(elapsedSeconds) {
+  if (elapsedSeconds < MIN_RUN_SECONDS) return 0;
+  const seconds = Math.min(elapsedSeconds, MAX_RUN_SECONDS);
+  return Math.min(MAX_DEFENSE_WAVE, 1 + Math.floor(seconds / MIN_WAVE_SECONDS));
+}
+
 function applyRunEarnings(profile, claimedCoins, elapsedSeconds, { game, score, won } = {}) {
   const p = { ...profile, owned: [...profile.owned] };
   const claimed = toInt(claimedCoins);
@@ -128,6 +139,12 @@ function applyRunEarnings(profile, claimedCoins, elapsedSeconds, { game, score, 
       p[field] = s;
       newBest = true;
     }
+  } else if (game === 'defense') {
+    const wave = Math.min(toInt(score), allowedWaveForRun(elapsedSeconds));
+    if (wave > (p.bestDefense || 0)) {
+      p.bestDefense = wave;
+      newBest = true;
+    }
   } else if (game === 'arena' && won === true && elapsedSeconds >= MIN_WIN_SECONDS) {
     p.arenaWins = (p.arenaWins || 0) + 1;
     newBest = true;
@@ -136,7 +153,7 @@ function applyRunEarnings(profile, claimedCoins, elapsedSeconds, { game, score, 
 }
 
 function bestOf(profile) {
-  return { runner: profile.bestRunner || 0, jumper: profile.bestJumper || 0, arena: profile.arenaWins || 0 };
+  return { runner: profile.bestRunner || 0, jumper: profile.bestJumper || 0, arena: profile.arenaWins || 0, defense: profile.bestDefense || 0 };
 }
 
 function publicProfile(profile, { isAdmin } = {}) {
@@ -166,6 +183,8 @@ module.exports = {
   serializeProfile,
   allowedCoinsForRun,
   allowedScoreForRun,
+  allowedWaveForRun,
+  MIN_WAVE_SECONDS,
   applyRunEarnings,
   bestOf,
   MAX_SCORE_PER_SECOND,

@@ -86,7 +86,7 @@ export function createBotController(ctx) {
             lastSeen: new THREE.Vector3(),
             searchT: 0,
             thinkT: Math.random() * 0.3,
-            skill: rand(0.35, 0.8),
+            skill: rand(0.25, 0.68),
             stuckT: 0,
             lastPos: new THREE.Vector3(),
             detourT: 0,
@@ -279,7 +279,7 @@ export function createBotController(ctx) {
         if (best) {
             if (best !== ai.target || !ai.visible) {
                 // first sight: a human-like moment to react
-                ai.reaction = 0.35 + (1 - ai.skill) * 0.55 + Math.random() * 0.2;
+                ai.reaction = 0.55 + (1 - ai.skill) * 0.7 + Math.random() * 0.3;
                 ai.aimTime = 0;
             }
             ai.target = best;
@@ -593,7 +593,7 @@ export function createBotController(ctx) {
         if (lowHealth && ai.visible) forward = -1; // back off to heal
         ai.holdT -= dt;
         // sometimes plant your feet for a steadier shot
-        const sideAmt = !ai.visible ? 0.2 : ai.holdT > 0 ? 0 : 0.85;
+        const sideAmt = !ai.visible ? 0.2 : ai.holdT > 0 ? 0 : 0.55;
         move.copy(toward).multiplyScalar(forward).addScaledVector(side, sideAmt);
         if (move.lengthSq() > 1) move.normalize();
         if (forward > 0.5) steer(bot, tmp.copy(bot.pos).addScaledVector(move, 5), move);
@@ -602,13 +602,13 @@ export function createBotController(ctx) {
         ai.strafeT -= dt;
         if (ai.strafeT <= 0) {
             ai.strafe *= -1;
-            ai.strafeT = rand(0.8, 2.2);
-            if (Math.random() < 0.25) ai.holdT = rand(0.4, 0.9);
+            ai.strafeT = rand(1.3, 3);
+            if (Math.random() < 0.35) ai.holdT = rand(0.5, 1.1);
         }
         ai.jumpT -= dt;
         if (ai.jumpT <= 0 && ai.visible) {
-            input.jump = Math.random() < 0.3;
-            ai.jumpT = rand(2, 5);
+            input.jump = Math.random() < 0.2;
+            ai.jumpT = rand(3, 6);
         }
 
         // shooting
@@ -632,8 +632,9 @@ export function createBotController(ctx) {
 
         // aim error: worse at range, against moving/jumping targets, and right after spotting
         const targetSpeed = Math.hypot(t.vel.x, t.vel.z) + Math.abs(t.vel.y) * 0.5;
-        let err = AIM_ERROR[w.kind] * (1.6 - ai.skill) + targetSpeed * 0.0045;
-        err *= Math.max(0.55, 1.4 - ai.aimTime * 0.35);
+        let err = AIM_ERROR[w.kind] * (2.1 - ai.skill) + targetSpeed * 0.0065;
+        err *= Math.max(0.7, 1.6 - ai.aimTime * 0.25);
+        if (t.human) err *= 1.2; // a little kinder to real players
         if (!bot.onGround) err *= 1.5;
         dir.subVectors(targetPoint, eye).normalize();
         dir.x += (Math.random() - 0.5) * err * 2;
@@ -643,10 +644,10 @@ export function createBotController(ctx) {
         // people shoot in bursts and re-aim; semi-automatic guns aren't spammed
         ai.burstT = (ai.burstT ?? rand(0.5, 1.2)) - dt;
         if (ai.burstT < 0) {
-            if (ai.burstT < -rand(0.35, 0.9)) ai.burstT = rand(0.5, 1.3);
+            if (ai.burstT < -rand(0.5, 1.2)) ai.burstT = rand(0.45, 1.1);
             return;
         }
-        if (!def.auto && Math.random() < 0.35) return;
+        if (!def.auto && Math.random() < 0.5) return;
         fire(bot, eye, dir, ctx.combat);
     }
 

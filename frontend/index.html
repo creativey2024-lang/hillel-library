@@ -286,6 +286,27 @@
 
             <!-- Game picker -->
             <div id="gamePicker" class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <button type="button" data-game="defense" class="game-card group text-right rounded-xl overflow-hidden border-2 border-amber-300 dark:border-amber-900 hover:border-amber-500 dark:hover:border-amber-500 bg-amber-50 dark:bg-slate-900 transition-all hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-amber-500 sm:col-span-2">
+                    <div class="relative aspect-[16/10] sm:aspect-[21/9] bg-indigo-950 overflow-hidden">
+                        <img src="/games/defense/preview.jpg" alt="הגנה על הספרייה" class="w-full h-full object-cover anim-ken-burns" loading="lazy">
+                        <span class="absolute bottom-2 left-2 bg-white/90 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full shadow">
+                            <i class="fa-solid fa-trophy ml-1 text-amber-500"></i>שיא: גל <span data-best-for="defense">0</span>
+                        </span>
+                        <span class="absolute top-2 right-2 bg-amber-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow anim-wiggle">חדש! · עד 4 חברים</span>
+                    </div>
+                    <div class="p-3 sm:p-4">
+                        <div class="flex items-center justify-between gap-2">
+                            <h4 class="font-bold text-slate-800 dark:text-white text-base flex items-center gap-2">
+                                <i class="fa-solid fa-book-open text-amber-500"></i> הגנה על הספרייה
+                            </h4>
+                            <span class="bg-amber-500 group-hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors anim-soft-pulse">
+                                <i class="fa-solid fa-play ml-1"></i>שחק
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">מפלצות פורצות מארבעה שערים קסומים אל הספרייה הגדולה - מגינים על ספר הזהב יחד עם חברים, גל אחרי גל. מטול רקטות, רובה קרח, מקל ברקים, וכל 5 גלים - טיטאן הדיו.</p>
+                    </div>
+                </button>
+
                 <button type="button" data-game="runner" class="game-card group text-right rounded-xl overflow-hidden border-2 border-sky-200 dark:border-sky-900 hover:border-sky-500 dark:hover:border-sky-500 bg-sky-50 dark:bg-slate-900 transition-all hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-sky-500">
                     <div class="relative aspect-[16/10] bg-sky-200 overflow-hidden">
                         <img src="/games/runner/preview.jpg" alt="ריצה בעיר" class="w-full h-full object-cover anim-ken-burns" loading="lazy">
@@ -312,7 +333,6 @@
                         <span class="absolute bottom-2 left-2 bg-white/90 text-violet-700 text-xs font-bold px-2.5 py-1 rounded-full shadow">
                             <i class="fa-solid fa-trophy ml-1 text-amber-500"></i>שיא: <span data-best-for="jumper">0</span>
                         </span>
-                        <span class="absolute top-2 right-2 bg-violet-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow anim-wiggle">חדש!</span>
                     </div>
                     <div class="p-3 sm:p-4">
                         <div class="flex items-center justify-between gap-2">
@@ -333,7 +353,6 @@
                         <span class="absolute bottom-2 left-2 bg-white/90 text-red-700 text-xs font-bold px-2.5 py-1 rounded-full shadow">
                             <i class="fa-solid fa-trophy ml-1 text-amber-500"></i>ניצחונות: <span data-best-for="arena">0</span>
                         </span>
-                        <span class="absolute top-2 right-2 bg-red-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow anim-wiggle">חדש!</span>
                     </div>
                     <div class="p-3 sm:p-4">
                         <div class="flex items-center justify-between gap-2">
@@ -347,6 +366,7 @@
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">צונחים עם גליידר לאי גדול מול 19 בוטים: מוצאים נשקים ותיבות, בורחים מהסערה ונלחמים עד שנשאר אחד. 50 מטבעות על כל חיסול ו-300 על ניצחון.</p>
                     </div>
                 </button>
+
 </div>
 
             <!-- Shop: skins and the admin role, paid with coins earned in the games -->

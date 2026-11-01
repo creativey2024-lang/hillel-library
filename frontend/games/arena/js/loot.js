@@ -276,6 +276,9 @@ export function createLoot({ scene, world, coinModel, audio }) {
         const ring = new THREE.Mesh(ringGeo, ringMat(r.hex));
         ring.position.y = 0.05;
         const beam = weapon.rarity >= 2 ? new THREE.Mesh(beamGeo, beamMat(r.hex)) : null;
+        // epic and legendary stand out from far away: taller, wider beams
+        if (beam && weapon.rarity >= 3) beam.scale.set(weapon.rarity === 4 ? 1.8 : 1.3, weapon.rarity === 4 ? 1.9 : 1.4, weapon.rarity === 4 ? 1.8 : 1.3);
+        if (weapon.rarity === 4) ring.scale.setScalar(1.35);
         return addItem({ id, type: 'weapon', weapon, mesh, ring, beam }, pos, pop);
     }
 

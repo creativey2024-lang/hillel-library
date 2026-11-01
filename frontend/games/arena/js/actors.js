@@ -4,7 +4,7 @@
  * healing items), ammo, a glider for the drop, and both hands on the gun.
  */
 import * as THREE from 'three';
-import { weaponMesh, WEAPONS } from './weapons.js';
+import { weaponMesh, WEAPONS, reloadTime } from './weapons.js';
 import { healMesh, isHeal } from './heals.js';
 
 export const CHARACTER_SCALE = 1.6;
@@ -250,7 +250,7 @@ function poseHolding(actor, it, time) {
     }
     // reloading: tip the gun over and back
     if (actor.reloadT > 0 && !healing) {
-        const total = WEAPONS[it.kind].reload;
+        const total = reloadTime(it);
         const k = Math.sin(Math.min(1, 1 - actor.reloadT / total) * Math.PI);
         hand.rotateZ(0.75 * k);
         hand.rotateX(0.45 * k);

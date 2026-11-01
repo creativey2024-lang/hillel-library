@@ -5,7 +5,7 @@
  */
 const FILES = ['blaster', 'blaster_repeater', 'enemy_hurt', 'weapon_change', 'jump_a', 'land', 'coin', 'eliminate'];
 
-export function createAudio() {
+export function createAudio({ base = './sounds/' } = {}) {
     let ctx = null;
     let master = null;
     const buffers = {};
@@ -31,7 +31,7 @@ export function createAudio() {
         for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
         await Promise.all(FILES.map(async (name) => {
             try {
-                const res = await fetch(`./sounds/${name}.ogg`);
+                const res = await fetch(`${base}${name}.ogg`);
                 buffers[name] = await ctx.decodeAudioData(await res.arrayBuffer());
             } catch (e) {
                 // a missing sound is not a problem
@@ -87,10 +87,28 @@ export function createAudio() {
         });
     }
 
+    // a short synth tone (zaps, magic, warnings)
+    function tone(freq, { length = 0.25, type = 'sine', volume = 0.2, slide = 0 } = {}) {
+        if (!ctx || muted || !Number.isFinite(freq) || !Number.isFinite(length) || !Number.isFinite(volume) || volume <= 0) return;
+        const t = ctx.currentTime;
+        const o = ctx.createOscillator();
+        o.type = type;
+        o.frequency.setValueAtTime(freq, t);
+        if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + length);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(volume, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + length);
+        o.connect(g).connect(master);
+        o.start(t);
+        o.stop(t + length + 0.05);
+    }
+
     return {
         init,
         play,
         chime,
+        boom,
+        tone,
         get muted() {
             return muted;
         },

@@ -41,9 +41,10 @@ const bestFromUrl = bridgeLib.bestFromUrl || (() => null);
 // T-Rex Runner values converted from pixels-per-frame (60 fps) to world units
 // per second, at roughly 40 px = 1 unit (the dino is ~47 px tall, our
 // character ~1.1 units).
-const START_SPEED = 9;            // T-Rex SPEED 6
-const MAX_SPEED = 19.5;           // T-Rex MAX_SPEED 13
-const ACCELERATION = 0.09;        // T-Rex ACCELERATION 0.001 per frame
+// (faster than the original: it starts quicker and keeps speeding up for about 1.5 minutes)
+const START_SPEED = 11.5;
+const MAX_SPEED = 27;
+const ACCELERATION = 0.17;
 const CLEAR_TIME = 2.6;           // seconds of empty track at the start (T-Rex CLEAR_TIME 3000 ms)
 
 // Jump: a full press reaches JUMP_HEIGHT; letting go early cuts the jump
@@ -77,18 +78,18 @@ const MUTE_KEY = 'hillel_sky_hop_muted';
 // minSpeed = speed from which it can appear, multipleSpeed = speed from
 // which it can come in groups.
 const OBSTACLE_TYPES = [
-    { type: 'brick', weight: 45, minSpeed: 0, multipleSpeed: 10.5, maxSize: 3, minGap: 3 },
+    { type: 'brick', weight: 45, minSpeed: 0, multipleSpeed: 13, maxSize: 3, minGap: 3 },
     { type: 'pit', weight: 30, minSpeed: 0, minGap: 3 },
-    { type: 'tall', weight: 16, minSpeed: 10.5, multipleSpeed: 15, maxSize: 2, minGap: 3.5 },
-    { type: 'bonus', weight: 9, minSpeed: 10, minGap: 2 },
+    { type: 'tall', weight: 16, minSpeed: 13, multipleSpeed: 17.5, maxSize: 2, minGap: 3.5 },
+    { type: 'bonus', weight: 9, minSpeed: 12.5, minGap: 2 },
     // extras so it doesn't get boring: springs that throw you high into a
     // trail of coins, and power-ups
-    { type: 'spring', weight: 9, minSpeed: 9.4, minGap: 2 },
-    { type: 'item', weight: 8, minSpeed: 9.3, minGap: 2 },
+    { type: 'spring', weight: 9, minSpeed: 11.9, minGap: 2 },
+    { type: 'item', weight: 8, minSpeed: 11.8, minGap: 2 },
     // a wide chasm crossed on floating stepping stones
-    { type: 'chasm', weight: 8, minSpeed: 10.2, minGap: 3 },
+    { type: 'chasm', weight: 8, minSpeed: 12.7, minGap: 3 },
     // a high path of floating platforms full of coins
-    { type: 'upper', weight: 8, minSpeed: 9.8, minGap: 2 },
+    { type: 'upper', weight: 8, minSpeed: 12.3, minGap: 2 },
 ];
 
 const LEDGE_DEPTH = 2.2;
@@ -739,23 +740,61 @@ function ledgeUnder(x, ledge) {
     return !ledge.dropped && x + 0.28 > ledge.x0 && x - 0.28 < ledge.x1;
 }
 
+// ---- how far can you jump right now? (the same rules as updatePlayer: a tap
+// is cut short once it reaches MIN_JUMP_HEIGHT, a held jump goes all the way)
+function jumpStartVelocity() {
+    // a little extra lift at high speed, like T-Rex's speed-based jump velocity
+    return JUMP_VELOCITY + (state.speed - START_SPEED) * 0.06;
+}
+// horizontal distance to land `dh` higher (or lower) than you took off, or null
+function jumpReach(dh, held) {
+    let y = 0;
+    let vy = jumpStartVelocity();
+    let t = 0;
+    const dt = 1 / 240;
+    for (let i = 0; i < 2400; i++) {
+        vy -= GRAVITY * dt;
+        y += vy * dt;
+        t += dt;
+        if (!held && y >= MIN_JUMP_HEIGHT && vy > DROP_VELOCITY) vy = DROP_VELOCITY;
+        if (vy <= 0 && y <= dh) return state.speed * t;
+        if (vy <= 0 && y < dh - 0.01) return null;
+    }
+    return null;
+}
+// a gap and a stone that can always be reached from the stone before:
+// the gap is shorter than a held jump (with room to spare), and the stone
+// plus gap is longer than the smallest tap (so you can't be forced to fly over it)
+function reachableStep(dh, falling) {
+    const far = jumpReach(dh + 0.15, true);
+    const near = jumpReach(Math.min(dh, 0), false) || 0;
+    if (!far) return null;
+    const gap = rand(Math.min(1.4, far * 0.4), Math.max(1.5, far * 0.68 - 0.5));
+    // time on the stone: red stones fall 0.45 s after you land, so keep those short enough to cross
+    let width = state.speed * (falling ? rand(0.26, 0.34) : rand(0.3, 0.46));
+    width = Math.max(width, near - gap + 1.2, 2.2);
+    return { gap, width };
+}
+
 // A wide chasm with stepping stones (some of them red ones that fall after you step on them).
+// Everything is measured from what a jump at the current speed can do, so it
+// never asks for an impossible jump - however fast the run is.
 function spawnChasm(x0) {
-    const maxGap = Math.min(4, state.speed * JUMP_TIME * 0.5);
-    const stones = [];
     let cursor = x0;
     const count = randInt(2, 4);
     let prevTop = GROUND_TOP;
+    const stones = [];
     for (let i = 0; i < count; i++) {
-        const gap = rand(Math.min(1.4, maxGap * 0.7), maxGap * 0.8);
-        const width = rand(2.6, 3.6);
         let top = GROUND_TOP + pick([0, 0.6, 1.1]);
         if (top - prevTop > 1.1) top = prevTop + 1.1;
-        stones.push({ x0: cursor + gap, width, top, falling: Math.random() < 0.4 });
-        cursor += gap + width;
+        const falling = Math.random() < 0.4;
+        const step = reachableStep(top - prevTop, falling) || { gap: 1.5, width: 3 };
+        stones.push({ x0: cursor + step.gap, width: step.width, top, falling });
+        cursor += step.gap + step.width;
         prevTop = top;
     }
-    const x1 = cursor + rand(Math.min(1.6, maxGap * 0.8), maxGap * 0.9);
+    const last = reachableStep(GROUND_TOP - prevTop, false) || { gap: 1.6 };
+    const x1 = cursor + last.gap;
     addPit(x0, x1);
     stones.forEach((st) => {
         addLedge(st.x0, st.width, st.top, st.falling);
@@ -764,16 +803,18 @@ function spawnChasm(x0) {
     return x1;
 }
 
-// A high path of floating platforms above the track, with coins on it.
+// A high path of floating platforms above the track, with coins on it
+// (longer and further apart at high speed, so you can hop along it).
 function spawnUpperPath(x0) {
     let cursor = x0;
     const count = randInt(2, 3);
     const top = GROUND_TOP + 2.0;
+    const far = jumpReach(0.15, true) || 6;
     for (let i = 0; i < count; i++) {
-        const width = rand(2.5, 3.6);
+        const width = Math.max(2.5, state.speed * rand(0.24, 0.34));
         addLedge(cursor, width, top, false);
         addCoinLine(cursor + 0.3, cursor + width - 0.2, top + 0.5);
-        cursor += width + rand(1.0, 1.6);
+        cursor += width + Math.min(far * 0.45, rand(1.0, 1.6) * (state.speed / START_SPEED));
     }
     return cursor;
 }
@@ -828,8 +869,9 @@ function spawnNext() {
 
     if (def.type === 'pit') {
         // the widest pit still leaves a comfortable margin on a full jump
-        const airDistance = state.speed * JUMP_TIME;
-        const maxWidth = Math.min(4.6, airDistance * 0.55);
+        // (a held jump, with a good margin, wherever you take off)
+        const airDistance = jumpReach(0, true) || state.speed * JUMP_TIME;
+        const maxWidth = Math.min(6, airDistance * 0.5);
         const width = rand(Math.min(1.8, maxWidth), maxWidth);
         x1 = x0 + width;
         addPit(x0, x1);
@@ -864,6 +906,10 @@ function spawnNext() {
     // sometimes a row of coins in the empty stretch
     if (gap > 7 && Math.random() < 0.45) addCoinPattern(x1 + 2.5, x1 + gap - 2.5);
     generator.nextX = x1 + gap;
+    // lay the track right up to the next thing now: at high speed a long piece
+    // (a spring's flight, a high path) used to reach the end of the built track
+    // before the next piece was made - and you fell through a hole that wasn't a pit
+    buildGroundTo(generator.nextX);
 }
 
 function clearWorld() {
@@ -1272,7 +1318,7 @@ function startJump() {
     player.reachedMinHeight = false;
     player.dropping = false;
     // a little extra lift at high speed, like T-Rex's speed-based jump velocity
-    player.vy = JUMP_VELOCITY + (state.speed - START_SPEED) * 0.06;
+    player.vy = jumpStartVelocity();
     playAction('jump', 0.05);
     playSound('jump', 0.4);
     spawnDust(player.x, GROUND_TOP, 3, 0.2);
@@ -1772,7 +1818,7 @@ async function init() {
 // Read-only peek for automated testing: add ?debug to the address.
 if (new URLSearchParams(window.location.search).has('debug')) {
     window.__skyHop = {
-        state, player, getObstacles: () => obstacles, getPits: () => pits, startJump, endJump, setDrop,
+        state, player, getObstacles: () => obstacles, getPits: () => pits, getTiles: () => tiles, startJump, endJump, setDrop,
         setStepHook: (fn) => { debugStepHook = fn; },
         activatePower, powers, getLedges: () => ledges, getCoins: () => coins,
         step: (dt) => update(dt),
