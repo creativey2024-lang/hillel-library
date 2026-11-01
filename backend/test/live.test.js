@@ -62,7 +62,9 @@ function connect(username, where = 'arena') {
   return new Promise((resolve, reject) => {
     ws.addEventListener('open', () => {
       client.send({ type: 'hello', where, skin: 'gold' });
-      resolve(client);
+      // only hand the client over once the server has registered it (the welcome),
+      // so a quick invite from another client never meets a "not online" user
+      client.waitFor((m) => m.type === 'welcome').then(() => resolve(client), reject);
     });
     ws.addEventListener('error', reject);
   });
