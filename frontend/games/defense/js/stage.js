@@ -61,6 +61,7 @@ export function createStage({ scene, camera, gltf, labels }) {
             const changed = !s.member !== !m || (m && (s.member.name !== m.name || s.member.skin !== m.skin));
             if (changed) {
                 if (s.model) s.group.remove(s.model);
+                if (s.skin && s.skin.dispose) s.skin.dispose(); // its sparkles / halo go too
                 s.model = null;
                 s.mixer = null;
                 s.skin = null;

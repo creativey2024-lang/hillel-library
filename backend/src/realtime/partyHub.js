@@ -127,7 +127,11 @@ function createPartyHub({ now = () => Date.now(), random = () => Math.random(), 
     if (p.leader === name) p.leader = p.members[0];
     // tell the others (and, if a match is on, that this player is gone)
     for (const m of p.members) sendTo(m, { type: 'left', username: name }, p.game);
+    // whoever stayed alone shouldn't be thrown into a solo match by surprise
+    if (p.members.length === 1) p.ready.clear();
     broadcastParty(p);
+    // the ones who stayed may all be ready already (they were waiting for this one)
+    if (!p.inMatch && p.members.length > 1) maybeStart(p);
   }
 
   // A match is only "on" while someone from the party really has the game

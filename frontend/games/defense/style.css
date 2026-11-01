@@ -9,6 +9,7 @@ html, body { background: #0b0820; }
 .df-wave { display: flex; align-items: baseline; gap: 10px; text-shadow: 0 2px 6px #000; }
 .df-wave span { font-size: 22px; font-weight: 900; color: #fde68a; letter-spacing: 0.5px; }
 .df-wave small { font-size: 13px; font-weight: 700; color: #e9d5ff; }
+.df-wave small.tap { pointer-events: auto; cursor: pointer; padding: 4px 10px; border-radius: 999px; background: rgba(250, 204, 21, 0.25); border: 1px solid rgba(250, 204, 21, 0.6); }
 .df-book { display: flex; align-items: center; gap: 8px; width: 100%; }
 .df-book-ico { flex: none; filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.8)); }
 .df-book-bar { position: relative; flex: 1; height: 16px; border-radius: 8px; background: rgba(15, 10, 40, 0.75); border: 2px solid rgba(250, 204, 21, 0.6); overflow: hidden; box-shadow: 0 0 14px rgba(250, 204, 21, 0.25); }

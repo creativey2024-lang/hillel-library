@@ -7,7 +7,7 @@
  * count (see backend/src/routes/games.js). Opened on its own (not inside the
  * site), the game just works without saving coins.
  */
-export function createBridge(game, { getRunCoins, onSaved } = {}) {
+export function createBridge(game, { getRunCoins, getRunExtra, onSaved } = {}) {
     const embedded = window.parent && window.parent !== window;
     let active = false;
 
@@ -27,7 +27,7 @@ export function createBridge(game, { getRunCoins, onSaved } = {}) {
 
     // closing the window or going back to the game list mid-run still saves the coins
     window.addEventListener('pagehide', () => {
-        if (active) runEnded(getRunCoins ? getRunCoins() : 0);
+        if (active) runEnded(getRunCoins ? getRunCoins() : 0, getRunExtra ? getRunExtra() : {});
     });
 
     function runStarted() {

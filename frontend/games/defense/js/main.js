@@ -158,6 +158,7 @@ let moveWorld = null;
 
 const bridge = createBridge('defense', {
     getRunCoins: () => state.coins,
+    getRunExtra: () => ({ score: state.wave }),
     onSaved: (info) => {
         const note = $('savedNote');
         note.classList.remove('hidden', 'warn');
@@ -385,7 +386,7 @@ function onWaveCleared(w) {
             player.shield = Math.min(100, player.shield + 50);
         }
     }
-    banner(`גל ${w} הושלם!`, `+${coins} מטבעות · תחמושת מולאה · +1 רימון · חיים מלאים · הגל הבא בעוד ${BREAK_SECONDS} שניות (B - עכשיו)`, 'good');
+    banner(`גל ${w} הושלם!`, `+${coins} מטבעות · תחמושת מולאה · +1 רימון · חיים מלאים · הגל הבא בעוד ${BREAK_SECONDS} שניות (${touchMode ? 'הקישו על הטיימר' : 'B'} - עכשיו)`, 'good');
     audio.chime();
 }
 
@@ -804,6 +805,7 @@ function teammateLeft(name) {
     if (!r || r.gone) return;
     r.gone = true;
     r.root.visible = false;
+    if (r.skin && r.skin.dispose) r.skin.dispose();
     toast(`<b>${esc(name)}</b> יצא/ה מהמשחק`);
     if (name === team.hostName) {
         // the leader ran the monsters: without them the defense can't go on
@@ -1461,6 +1463,10 @@ function resume() {
     clock.getDelta();
 }
 $('resumeBtn').addEventListener('click', resume);
+// on a phone there's no B key: tap the wave timer to start the next wave now
+$('waveSub').addEventListener('pointerdown', () => {
+    if (state.mode === 'playing' && state.phase === 'break') skipBreak();
+});
 
 const touch = { stick: null, moveX: 0, moveZ: 0, look: null };
 if (touchMode) {
@@ -1767,8 +1773,9 @@ function updateHud(dt) {
     }
     state.alarmT = (state.alarmT || 0) - dt;
     $('waveLabel').textContent = state.wave ? `גל ${state.wave}` : 'מתכוננים';
+    $('waveSub').classList.toggle('tap', touchMode && state.phase === 'break');
     $('waveSub').textContent = state.phase === 'break'
-        ? `הגל ${state.wave ? 'הבא' : 'הראשון'} בעוד ${Math.max(0, Math.ceil(state.breakT))} · B להתחיל`
+        ? `הגל ${state.wave ? 'הבא' : 'הראשון'} בעוד ${Math.max(0, Math.ceil(state.breakT))} · ${touchMode ? 'הקישו כאן להתחיל' : 'B להתחיל'}`
         : `${state.left} מפלצות נשארו`;
     // a boss on the field?
     const boss = monstersNow().find((m) => m.alive && m.def.boss);

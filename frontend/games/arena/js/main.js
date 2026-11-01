@@ -828,6 +828,7 @@ function teammateLeft(name) {
         r.alive = false;
         r.root.visible = false;
     }
+    if (r.skin && r.skin.dispose) r.skin.dispose();
     hud.feed(`<b>${name}</b> יצא מהמשחק`);
     if (name === team.hostName && !team.host) {
         // the leader's computer ran the bots: this match can't go on
@@ -1618,6 +1619,10 @@ function updateDeadActor(a, dt) {
     if (a.glider) a.glider.visible = false;
     if (a.dieT > 2.2 && !a.puffed) {
         a.puffed = true;
+        if (a.skin && a.skin.dispose) {
+            a.skin.dispose(); // the skin's halo / sparkles vanish with the character
+            a.skin = null;
+        }
         effects.burst(a.pos, a.isPlayer ? 0xfacc15 : 0xc4b5fd);
     }
     if (a.dieT > 2.2) a.root.scale.setScalar(Math.max(0.001, 1 - (a.dieT - 2.2) / 0.35));
@@ -1704,6 +1709,10 @@ function update(dt) {
         else updateDeadActor(a, dt);
     }
     if (player && player.skin) player.skin.update(dt, { position: player.root.position, worldVelocity: null, moving: player.moving });
+    // team-mates' skins (sparkles, the galaxy halo) follow them too
+    for (const r of team.remotes.values()) {
+        if (r.skin && !r.gone && r.alive) r.skin.update(dt, { position: r.root.position, worldVelocity: null, moving: r.moving });
+    }
 
     if (player) {
         if (state.mode === 'ready') {

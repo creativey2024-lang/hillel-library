@@ -1135,6 +1135,7 @@ function showBanner(text, small) {
 
 const bridge = createBridge('jumper', {
     getRunCoins: () => state.coins,
+    getRunExtra: () => ({ score: state.score }),
     onSaved: showSaved,
 });
 

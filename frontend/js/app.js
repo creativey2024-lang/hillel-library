@@ -931,7 +931,7 @@
         defense: {
             url: '/games/defense/index.html',
             title: 'הגנה על הספרייה',
-            subtitle: 'WASD תנועה · עכבר כיוון וירי · E חנויות ואיסוף · G רימון · Esc הפסקה',
+            subtitle: 'WASD תנועה · עכבר כיוון וירי · E איסוף והקמת חבר · G רימון · Esc הפסקה',
             icon: 'fa-book-open',
             iconClass: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
             bestKey: 'hillel_defense_best',

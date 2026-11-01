@@ -750,6 +750,7 @@ function progress() {
 
 const bridge = createBridge('runner', {
     getRunCoins: () => state.coins,
+    getRunExtra: () => ({ score: state.score }),
     onSaved: showSaved,
 });
 

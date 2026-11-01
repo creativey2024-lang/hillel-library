@@ -197,7 +197,7 @@ function addOutline(model, color, thickness) {
  *          info = { position: feet position (Vector3), worldVelocity: Vector3, moving: bool }
  */
 export function applySkin({ model, scene, skinId, height = 1.4 }) {
-    const noop = { update() {}, onJump() {}, onLand() {}, id: '' };
+    const noop = { update() {}, onJump() {}, onLand() {}, dispose() {}, id: '' };
     if (!SKIN_IDS.includes(skinId)) return noop;
 
     const particles = new Particles(scene);
@@ -230,6 +230,7 @@ export function applySkin({ model, scene, skinId, height = 1.4 }) {
             },
             onJump() {},
             onLand() {},
+            dispose() { particles.dispose(); },
         };
     }
 
@@ -279,6 +280,10 @@ export function applySkin({ model, scene, skinId, height = 1.4 }) {
                 ringT = 0;
             },
             onLand() {},
+            dispose() {
+                particles.dispose();
+                scene.remove(ring);
+            },
         };
     }
 
@@ -350,6 +355,11 @@ export function applySkin({ model, scene, skinId, height = 1.4 }) {
                     spin: 4,
                 });
             }
+        },
+        dispose() {
+            particles.dispose();
+            scene.remove(halo);
+            scene.remove(halo2);
         },
     };
 }

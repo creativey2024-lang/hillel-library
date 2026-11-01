@@ -297,3 +297,22 @@ test('if the leader walks away from the game, a friend still in the lobby takes 
     srv.close();
   }
 });
+
+test('when the partner leaves, the one who stayed is not "ready" any more (no surprise solo match)', async () => {
+  const a = await connect('עדי', 'defense');
+  const b = await connect('רוני', 'defense');
+  await a.waitFor((m) => m.type === 'party');
+  a.send({ type: 'invite', to: 'רוני' });
+  const inv = await b.waitFor((m) => m.type === 'invite');
+  b.send({ type: 'accept', partyId: inv.partyId });
+  await b.waitFor((m) => m.type === 'joinedParty');
+  await a.waitFor((m) => m.type === 'party' && m.party.members.length === 2);
+  a.send({ type: 'ready', ready: true });
+  await a.waitFor((m) => m.type === 'party' && m.party.members.some((x) => x.name === 'עדי' && x.ready));
+  b.send({ type: 'leave' });
+  const view = await a.waitFor((m) => m.type === 'party' && m.party.members.length === 1);
+  assert.equal(view.party.members[0].ready, false);
+  assert.ok(!a.inbox.some((m) => m.type === 'start'));
+  a.close();
+  b.close();
+});
