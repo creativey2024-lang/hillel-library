@@ -29,6 +29,7 @@ import { planWave, hpScale, spawnGap, maxAlive, BREAK_SECONDS, FIRST_BREAK } fro
 import { createFx } from './fx.js';
 import { createStage } from './stage.js';
 import { glowTexture } from './paint.js';
+import { createQuality, qualityButton, createBlobShadows } from '../../shared/quality.js';
 
 window.__gameBooted = true; // (all the game's files loaded - see index.html)
 const createBridge = bridgeLib.createBridge;
@@ -54,7 +55,7 @@ const lowGfx = params.has('lowgfx');
 
 // ------------------------------------------------------------------ renderer and scene
 const renderer = new THREE.WebGLRenderer({ antialias: !lowGfx, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowGfx ? 1 : 1.75));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1));
 renderer.shadowMap.enabled = !lowGfx;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -67,7 +68,8 @@ scene.fog = new THREE.FogExp2(0x1a1236, 0.0135);
 const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 900);
 
 // moonlight from above, warm candle light around, gold from the book, purple from the portals
-scene.add(new THREE.HemisphereLight(0x8f9cff, 0x3b2412, 1.25));
+const hemi = new THREE.HemisphereLight(0x8f9cff, 0x3b2412, 1.25);
+scene.add(hemi);
 scene.add(new THREE.AmbientLight(0xffd9a8, 0.35));
 const moon = new THREE.DirectionalLight(0xc7d4ff, 1.5);
 moon.position.set(-40, 80, -30);
@@ -93,11 +95,12 @@ const portalLights = [[0, 58], [58, 0], [0, -58], [-58, 0]].map(([x, z]) => {
     return l;
 });
 // warm lights along the avenues
-for (const [x, z] of [[0, 30], [30, 0], [0, -30], [-30, 0]]) {
+const avenueLights = [[0, 30], [30, 0], [0, -30], [-30, 0]].map(([x, z]) => {
     const l = new THREE.PointLight(0xffb867, 18, 24, 1.8);
     l.position.set(x, 7, z);
     scene.add(l);
-}
+    return l;
+});
 
 function resize() {
     const w = window.innerWidth;
@@ -183,7 +186,7 @@ async function load() {
     characterGltf = await loader.loadAsync('../jumper/models/character.glb');
     $('loadingText').textContent = 'מסדר את המדפים... 50%';
     await new Promise((r) => setTimeout(r, 30));
-    lib = createLibrary(scene, { quality: lowGfx ? 0.3 : 1 });
+    lib = createLibrary(scene, { quality: quality.level === 'low' ? 0.3 : 1 });
     moveWorld = { ...lib, terrainHeight: () => 1 };
     $('loadingText').textContent = 'מדליק את הנרות... 85%';
     await new Promise((r) => setTimeout(r, 30));
@@ -1964,19 +1967,67 @@ function update(dt) {
     }
 }
 
-const perf = { frames: 0, time: 0, lowered: 0 };
-function lowerQuality() {
-    perf.lowered += 1;
-    perf.frames = 0;
-    perf.time = 0;
-    if (perf.lowered === 1) renderer.setPixelRatio(1);
-    else if (perf.lowered === 2) {
-        renderer.shadowMap.enabled = false;
-        setMonsterShadows(false);
+// ------------------------------------------------------------------ graphics quality
+// High: soft moon shadows and every light. Medium: simpler shadows, no avenue
+// lamps. Low ("חסכונית"): no shadow maps (soft round shadows under everyone
+// instead), only the book's light (the portals still glow) - and on every level
+// the picture gets a little less sharp by itself if the computer struggles.
+const blobs = createBlobShadows(THREE, scene);
+function applyGraphics(level) {
+    const shadows = level !== 'low';
+    const size = level === 'high' ? 2048 : 1024;
+    const type = level === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    const changed = renderer.shadowMap.enabled !== shadows || renderer.shadowMap.type !== type;
+    renderer.shadowMap.enabled = shadows;
+    renderer.shadowMap.type = type;
+    moon.castShadow = shadows;
+    setMonsterShadows(shadows);
+    if (moon.shadow.mapSize.x !== size) {
+        moon.shadow.mapSize.set(size, size);
+        if (moon.shadow.map) {
+            moon.shadow.map.dispose();
+            moon.shadow.map = null;
+        }
+    }
+    avenueLights.forEach((l) => { l.visible = level === 'high'; });
+    portalLights.forEach((l) => { l.visible = level !== 'low'; });
+    fx.setFlashLights(level === 'high' ? 3 : level === 'medium' ? 2 : 1);
+    // a little more moonlight where the lamps are off
+    hemi.intensity = level === 'high' ? 1.25 : level === 'medium' ? 1.4 : 1.6;
+    blobs.setEnabled(!shadows);
+    if (changed) {
         scene.traverse((o) => {
-            if (o.material) o.material.needsUpdate = true;
+            if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; });
         });
     }
+}
+const quality = createQuality({
+    renderer,
+    apply: applyGraphics,
+    pixelRatio: (level) => {
+        const dpr = window.devicePixelRatio || 1;
+        return level === 'high' ? Math.min(dpr, 1.5) : level === 'medium' ? Math.min(dpr, 1) : Math.min(dpr, 1) * 0.85;
+    },
+    forceLow: lowGfx,
+});
+quality.start();
+$('lobby').querySelector('.lb-actions').prepend(qualityButton(quality, 'lb-gfx'));
+$('pauseScreen').querySelector('.panel').appendChild(qualityButton(quality));
+
+// soft shadows under everyone (only in the low setting)
+function updateBlobs() {
+    if (!blobs.enabled || state.mode === 'ready') return;
+    blobs.begin();
+    const people = [player, ...team.remotes.values()].filter((a) => a && !a.gone && a.root.visible);
+    for (const a of people) {
+        const ground = lib.supportHeight(a.pos.x, a.pos.z, a.pos.y + 0.5);
+        blobs.put(a.pos.x, ground, a.pos.z, 1.5, a.pos.y - ground);
+    }
+    for (const m of monstersNow()) {
+        if (!m.alive) continue;
+        blobs.put(m.pos.x, m.pos.y, m.pos.z, m.def.radius * m.size * 2.6, m.def.fly || 0);
+    }
+    blobs.end();
 }
 
 function loop() {
@@ -1993,17 +2044,9 @@ function loop() {
     if (state.mode === 'loading') return;
     const solo = !team.on;
     if (!(solo && !$('pauseScreen').classList.contains('hidden'))) update(dt);
+    updateBlobs();
     renderer.render(scene, camera);
-    if (state.mode === 'playing' && perf.lowered < 2) {
-        perf.frames += 1;
-        perf.time += raw;
-        if (perf.time > 4) {
-            if (perf.time / perf.frames > 1 / 28) lowerQuality();
-            else perf.lowered = perf.lowered || 0;
-            perf.frames = 0;
-            perf.time = 0;
-        }
-    }
+    quality.frame(raw, state.mode === 'playing' && !document.hidden);
 }
 
 // ------------------------------------------------------------------ the lobby (party, invites, ready)
@@ -2216,7 +2259,7 @@ if (params.has('debug')) {
         step: (dt) => update(dt),
         setView: (y, p) => { yaw = y; pitch = p; },
         startMatch, endMatch, doUpgrade, interact, fireWeapon, throwGrenade, giveWeapon, damagePlayer,
-        renderer, scene, camera,
+        renderer, scene, camera, quality,
     };
 }
 

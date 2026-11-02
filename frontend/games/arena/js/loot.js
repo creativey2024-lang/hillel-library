@@ -490,11 +490,19 @@ export function createLoot({ scene, world, coinModel, audio }) {
         Object.entries(actor.ammo).forEach(([t, n]) => { if (n > 0) dropAmmo(p.clone(), t, n, true); });
     }
 
-    // small things far away aren't drawn (you couldn't see them anyway)
+    // small things far away aren't drawn (you couldn't see them anyway);
+    // on slow computers a bit less far (setViewScale)
+    let view = 1;
+    function setViewScale(k) {
+        view = k;
+    }
     function update(dt, t, viewer) {
-        for (const c of chests) c.mesh.visible = !viewer || c.pos.distanceToSquared(viewer) < 150 * 150;
+        const chestR = 150 * view;
+        const coinR = 65 * view;
+        const itemR = 95 * view;
+        for (const c of chests) c.mesh.visible = !viewer || c.pos.distanceToSquared(viewer) < chestR * chestR;
         for (const it of items) {
-            const far = viewer && it.pos.distanceToSquared(viewer) > (it.type === 'coin' ? 65 * 65 : 95 * 95);
+            const far = viewer && it.pos.distanceToSquared(viewer) > (it.type === 'coin' ? coinR * coinR : itemR * itemR);
             it.holder.visible = !far;
             if (far && !it.vel) continue;
             if (it.vel) {
@@ -546,7 +554,7 @@ export function createLoot({ scene, world, coinModel, audio }) {
     }
 
     return {
-        items, chests, spawnInitial, openChest, autoPickup, takeWeapon, nearestInteractable, dropAll, dropWeapon, dropSlotItem, removeItem, update, HEALS,
+        items, chests, spawnInitial, openChest, autoPickup, takeWeapon, nearestInteractable, dropAll, dropWeapon, dropSlotItem, removeItem, update, setViewScale, HEALS,
         hooks, itemSpec, fromSpec, takenRemote, setIdPrefix, byId,
     };
 }

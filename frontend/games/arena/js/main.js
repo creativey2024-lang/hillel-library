@@ -32,6 +32,7 @@ import { createAudio } from './audio.js';
 import { createLobby } from './lobby.js';
 import { fillIcons, iconSVG } from '../../shared/icons.js';
 import { createNet } from './net.js';
+import { createQuality, qualityButton, createBlobShadows } from '../../shared/quality.js';
 
 window.__gameBooted = true; // (all the game's files loaded - see index.html)
 
@@ -67,6 +68,7 @@ scene.fog = new THREE.Fog(FOG, 170, 820);
 const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 1100);
 
 // sky: a gradient dome
+let skyDome = null;
 {
     const sky = new THREE.Mesh(
         new THREE.SphereGeometry(700, 32, 16), // inside the view distance (also in low quality)
@@ -81,6 +83,7 @@ const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 1100);
     );
     sky.onBeforeRender = () => sky.position.copy(camera.position);
     scene.add(sky);
+    skyDome = sky;
 }
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x6b8a5a, 1.45));
@@ -187,7 +190,7 @@ async function load() {
     }));
     // give the "building the island" text a chance to show
     await new Promise((r) => setTimeout(r, 30));
-    world = createWorld(scene, models, { grass: !new URLSearchParams(window.location.search).has('lowgfx') });
+    world = createWorld(scene, models, { grass: true });
     $('loadingText').textContent = 'מפזר שלל...';
     await new Promise((r) => setTimeout(r, 30));
 
@@ -229,6 +232,7 @@ async function load() {
     characterGltf = models.character;
     lobby = createLobby({ renderer, gltf: models.character, labels: $('lobbyLabels') });
     lobby.resize(window.innerWidth, window.innerHeight);
+    quality.start();
 }
 const clouds = [];
 const killLog = [];
@@ -1697,6 +1701,7 @@ function update(dt) {
     }
     if (state.mode !== 'loading') loot.update(dt, t, camera.position);
     if (player && state.mode !== 'loading') world.updateGrass(player.pos.x, player.pos.z);
+    world.updateLod(camera.position);
 
     for (const a of actors) {
         // dust when someone lands (and a little dip of the camera for you)
@@ -1728,26 +1733,73 @@ function update(dt) {
     }
 }
 
-// Slow computer? After a few seconds of play, turn off shadows and render
-// fewer pixels so the game stays smooth.
-const perf = { frames: 0, time: 0, lowered: false };
-function lowerQuality() {
-    if (perf.lowered) return;
-    perf.lowered = true;
-    renderer.setPixelRatio(1);
-    renderer.shadowMap.enabled = false;
-    sun.castShadow = false;
-    // no grass, and don't draw quite as far
-    if (world) world.setGrass(false);
-    camera.far = 760;
-    scene.fog.far = 680;
+// ------------------------------------------------------------- graphics quality
+// High: soft shadows, grass and flowers, far view. Medium: simpler shadows,
+// a bit less far. Low ("חסכונית"): no shadow maps (soft round shadows under the
+// characters instead), no grass, a hazier, closer horizon - and on every level
+// the picture gets a little less sharp by itself if the computer struggles.
+const blobs = createBlobShadows(THREE, scene);
+function applyGraphics(level) {
+    const shadows = level !== 'low';
+    const size = level === 'high' ? 2048 : 1024;
+    const type = level === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    const changed = renderer.shadowMap.enabled !== shadows || renderer.shadowMap.type !== type;
+    renderer.shadowMap.enabled = shadows;
+    renderer.shadowMap.type = type;
+    sun.castShadow = shadows;
+    if (sun.shadow.mapSize.x !== size) {
+        sun.shadow.mapSize.set(size, size);
+        if (sun.shadow.map) {
+            sun.shadow.map.dispose();
+            sun.shadow.map = null;
+        }
+    }
+    const ext = level === 'high' ? 55 : 42;
+    Object.assign(sun.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext });
+    sun.shadow.camera.updateProjectionMatrix();
+    blobs.setEnabled(!shadows);
+    if (world) {
+        world.setGrass(level !== 'low');
+        world.setDetail(level !== 'low');
+        world.setLodDistance({ high: 170, medium: 120, low: 80 }[level]);
+    }
+    if (loot) loot.setViewScale(level === 'low' ? 0.6 : level === 'medium' ? 0.85 : 1);
+    const view = { high: [1100, 170, 820], medium: [900, 150, 700], low: [560, 80, 480] }[level];
+    camera.far = view[0];
+    scene.fog.near = view[1];
+    scene.fog.far = view[2];
     camera.updateProjectionMatrix();
-    scene.traverse((o) => {
-        if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; });
-    });
-    resize();
+    if (skyDome) skyDome.scale.setScalar(Math.min(1, (view[0] * 0.9) / 700));
+    if (changed) {
+        scene.traverse((o) => {
+            if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; });
+        });
+    }
 }
-if (new URLSearchParams(window.location.search).has('lowgfx')) lowerQuality();
+const quality = createQuality({
+    renderer,
+    apply: applyGraphics,
+    pixelRatio: (level) => {
+        const dpr = window.devicePixelRatio || 1;
+        return level === 'high' ? Math.min(dpr, 1.5) : level === 'medium' ? Math.min(dpr, 1) : Math.min(dpr, 1) * 0.85;
+    },
+    forceLow: new URLSearchParams(window.location.search).has('lowgfx'),
+});
+// the "graphics" buttons: in the lobby and in the pause menu
+$('lobby').querySelector('.lb-actions').prepend(qualityButton(quality, 'lb-gfx'));
+$('pauseScreen').querySelector('.panel').appendChild(qualityButton(quality));
+
+// soft shadows under everyone (only in the low setting)
+function updateBlobs() {
+    if (!blobs.enabled) return;
+    blobs.begin();
+    for (const a of actors) {
+        if (!a.root.visible || (!a.alive && a.dieT > 2.2)) continue;
+        const ground = world.supportHeight(a.pos.x, a.pos.z, a.pos.y + 0.5);
+        blobs.put(a.pos.x, ground, a.pos.z, 1.5, a.pos.y - ground);
+    }
+    blobs.end();
+}
 
 function loop() {
     const raw = clock.getDelta();
@@ -1760,12 +1812,9 @@ function loop() {
         return;
     }
     if (state.mode !== 'paused') update(dt);
+    updateBlobs();
     renderer.render(scene, camera);
-    if (state.mode === 'playing' && !perf.lowered && perf.time < 6) {
-        perf.frames += 1;
-        perf.time += raw;
-        if (perf.time > 4 && perf.time / perf.frames > 1 / 24) lowerQuality();
-    }
+    quality.frame(raw, state.mode === 'playing' && !document.hidden);
     requestAnimationFrame(loop);
 }
 
@@ -1816,6 +1865,7 @@ if (new URLSearchParams(window.location.search).has('debug')) {
         renderer,
         scene,
         camera,
+        quality,
         get hud() { return hud; },
         killLog,
     };

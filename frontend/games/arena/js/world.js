@@ -373,9 +373,42 @@ export function createWorld(scene, models, opts = {}) {
         geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
         geo.setIndex(new THREE.BufferAttribute(idx, 1));
         geo.computeVertexNormals();
-        const terrain = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, map: texture('grass'), roughness: 0.96 }));
-        terrain.receiveShadow = true;
-        scene.add(terrain);
+        // drawn as 8 x 8 tiles that share the same points (no seams), so only
+        // the tiles in front of you are drawn
+        const terrainMat = new THREE.MeshStandardMaterial({ vertexColors: true, map: texture('grass'), roughness: 0.96 });
+        const TILE = 32;
+        for (let tj = 0; tj < SEG; tj += TILE) {
+            for (let ti = 0; ti < SEG; ti += TILE) {
+                const tIdx = new Uint32Array(TILE * TILE * 6);
+                let m = 0;
+                let lo = Infinity;
+                let hi = -Infinity;
+                for (let j = tj; j < tj + TILE; j++) {
+                    for (let i = ti; i < ti + TILE; i++) {
+                        const a = j * W1 + i;
+                        const b = a + 1;
+                        const d = a + W1;
+                        const e = d + 1;
+                        tIdx[m++] = a; tIdx[m++] = d; tIdx[m++] = b;
+                        tIdx[m++] = b; tIdx[m++] = d; tIdx[m++] = e;
+                        lo = Math.min(lo, heights[a]);
+                        hi = Math.max(hi, heights[a]);
+                    }
+                }
+                const tile = new THREE.BufferGeometry();
+                for (const name of ['position', 'color', 'uv', 'normal']) tile.setAttribute(name, geo.attributes[name]);
+                tile.setIndex(new THREE.BufferAttribute(tIdx, 1));
+                const cx = -MAP_HALF + (ti + TILE / 2) * CELL;
+                const cz = -MAP_HALF + (tj + TILE / 2) * CELL;
+                const half = (TILE / 2) * CELL;
+                tile.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, (lo + hi) / 2, cz), Math.hypot(half, half, (hi - lo) / 2 + 1));
+                tile.boundingBox = new THREE.Box3(new THREE.Vector3(cx - half, lo, cz - half), new THREE.Vector3(cx + half, hi, cz + half));
+                const terrain = new THREE.Mesh(tile, terrainMat);
+                terrain.receiveShadow = true;
+                terrain.matrixAutoUpdate = false;
+                scene.add(terrain);
+            }
+        }
     }
 
     // ---- sea (and the lake: the same water, the lake bed is below sea level)
@@ -1794,15 +1827,124 @@ export function createWorld(scene, models, opts = {}) {
     }
 
     // ---- turn the batches into meshes
+    // One mesh per material AND per square of the map (CHUNK x CHUNK): that way
+    // the parts behind you, and everything far from you, are skipped when drawing
+    // (and when drawing shadows, which only cover the area around you).
+    const CHUNK = 140;
+    const chunkKey = (x, z) => `${Math.floor((x + MAP_HALF) / CHUNK)},${Math.floor((z + MAP_HALF) / CHUNK)}`;
+    const bbox = new THREE.Box3();
+    // Plain painted things that differ only in colour share ONE material: the
+    // colour goes into the points themselves. Hundreds of draws become a few
+    // dozen - the biggest win on slow computers. (Glowing, see-through and
+    // shiny materials keep their own.)
+    {
+        const shared = new Map();
+        const merged = new Map();
+        for (const [material, list] of batches) {
+            const special = material.transparent || material.normalMap || material.emissiveMap || material.vertexColors
+                || (material.emissive && material.emissive.getHex() !== 0 && material.emissiveIntensity > 0)
+                || !material.isMeshStandardMaterial;
+            if (special) {
+                merged.set(material, list);
+                continue;
+            }
+            const rough = Math.round(material.roughness * 10) / 10;
+            const metal = Math.round(material.metalness * 10) / 10;
+            const key = `${material.map ? material.map.uuid : '-'}|${material.userData.uvScale || 0}|${material.side}|${rough}|${metal}`;
+            let target = shared.get(key);
+            if (!target) {
+                target = new THREE.MeshStandardMaterial({ vertexColors: true, map: material.map || null, roughness: rough, metalness: metal, side: material.side });
+                target.userData.uvScale = material.userData.uvScale;
+                shared.set(key, target);
+                merged.set(target, []);
+            }
+            const c = material.color;
+            for (const g of list) {
+                const n = g.attributes.position.count;
+                const col = new Float32Array(n * 3);
+                for (let i = 0; i < n; i++) {
+                    col[i * 3] = c.r;
+                    col[i * 3 + 1] = c.g;
+                    col[i * 3 + 2] = c.b;
+                }
+                for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name);
+                if (!g.attributes.normal) g.computeVertexNormals();
+                if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
+                g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+                merged.get(target).push(g);
+            }
+        }
+        batches.clear();
+        for (const [m, list] of merged) batches.set(m, list);
+    }
     for (const [material, list] of batches) {
-        const geo = mergeGeometries(list, false);
-        if (material.map) worldUV(geo, material.userData.uvScale || 2);
-        const m = new THREE.Mesh(geo, material);
-        m.castShadow = true;
-        m.receiveShadow = true;
-        scene.add(m);
+        const parts = new Map();
+        for (const g of list) {
+            bbox.setFromBufferAttribute(g.attributes.position);
+            const k = chunkKey((bbox.min.x + bbox.max.x) / 2, (bbox.min.z + bbox.max.z) / 2);
+            if (!parts.has(k)) parts.set(k, []);
+            parts.get(k).push(g);
+        }
+        for (const part of parts.values()) {
+            const geo = mergeGeometries(part, false);
+            if (material.map) worldUV(geo, material.userData.uvScale || 2);
+            geo.computeBoundingSphere();
+            const m = new THREE.Mesh(geo, material);
+            m.castShadow = true;
+            m.receiveShadow = true;
+            m.matrixAutoUpdate = false;
+            scene.add(m);
+        }
     }
     batches.clear();
+
+    // instanced things (trees, rocks, bushes, flowers) are split the same way
+    // entries: [{ x, z, m4, color? }]
+    const detailMeshes = []; // small things hidden in the lowest graphics setting
+    const lodPairs = []; // trees far away are drawn with a simpler shape
+    function addInstanced(geo, material, entries, { shadow = true, detail = false, lowGeo = null } = {}) {
+        const parts = new Map();
+        for (const e of entries) {
+            const k = chunkKey(e.x, e.z);
+            if (!parts.has(k)) parts.set(k, []);
+            parts.get(k).push(e);
+        }
+        for (const part of parts.values()) {
+            const im = new THREE.InstancedMesh(geo, material, part.length);
+            part.forEach((e, i) => {
+                im.setMatrixAt(i, e.m4);
+                if (e.color) im.setColorAt(i, e.color);
+            });
+            im.computeBoundingSphere();
+            im.castShadow = shadow;
+            im.receiveShadow = true;
+            im.matrixAutoUpdate = false;
+            scene.add(im);
+            if (detail) detailMeshes.push(im);
+            if (lowGeo) {
+                // the same trees (same places and colours), fewer triangles
+                const low = new THREE.InstancedMesh(lowGeo, material, part.length);
+                low.instanceMatrix = im.instanceMatrix;
+                low.instanceColor = im.instanceColor;
+                low.boundingSphere = im.boundingSphere;
+                low.castShadow = shadow;
+                low.receiveShadow = true;
+                low.matrixAutoUpdate = false;
+                low.visible = false;
+                scene.add(low);
+                lodPairs.push({ hi: im, lo: low, center: im.boundingSphere.center, radius: im.boundingSphere.radius });
+            }
+        }
+    }
+    let lodNear = 170;
+    function updateLod(camPos) {
+        for (const p of lodPairs) {
+            const d = Math.hypot(p.center.x - camPos.x, p.center.z - camPos.z) - p.radius;
+            const near = d < lodNear;
+            p.hi.visible = near;
+            p.lo.visible = !near;
+        }
+    }
 
     // ---- trees (instanced: pine, oak, birch), rocks, bushes, flowers
     function vColors(geo, fn) {
@@ -1848,6 +1990,23 @@ export function createWorld(scene, models, opts = {}) {
         blob(1.3, 0, 4.9, 0), blob(1.0, 0.7, 5.8, 0.2), blob(0.9, -0.6, 5.5, -0.4),
     ]);
 
+    // the same trees with far fewer triangles, for far away
+    const pineLow = mergeGeometries([
+        vColors(nonIdx(new THREE.CylinderGeometry(0.22, 0.38, 2.6, 4, 1, true).translate(0, 1.3, 0)), (x, y, z, c) => c.copy(trunkC)),
+        ...[[2.2, 3.6, 3.6], [1.5, 3.6, 5.8]].map(([r, h, y]) =>
+            vColors(nonIdx(new THREE.ConeGeometry(r, h, 6, 1, true).translate(0, y, 0)), (x, yy, z, c) => {
+                const k = (yy - (y - h / 2)) / h;
+                c.setRGB(0.62 + k * 0.5, 0.75 + k * 0.4, 0.62 + k * 0.4);
+            })),
+    ]);
+    const oakLow = mergeGeometries([
+        vColors(nonIdx(new THREE.CylinderGeometry(0.28, 0.42, 3.0, 4, 1, true).translate(0, 1.5, 0)), (x, y, z, c) => c.copy(trunkC)),
+        blob(2.2, 0.1, 4.6, 0), blob(1.4, 0.2, 5.8, -0.2),
+    ]);
+    const birchLow = mergeGeometries([
+        vColors(nonIdx(new THREE.CylinderGeometry(0.16, 0.24, 4.2, 4, 1, true).translate(0, 2.1, 0)), (x, y, z, c) => c.setHex(0xe8e6de)),
+        blob(1.35, 0, 5.1, 0),
+    ]);
     const treeSpots = [];
     const forest = P.forest;
     for (let tries = 0; tries < 30000 && treeSpots.length < 2600; tries++) {
@@ -1876,20 +2035,15 @@ export function createWorld(scene, models, opts = {}) {
     ];
     [pineGeo, oakGeo, birchGeo].forEach((geo, kind) => {
         const spots = treeSpots.filter((t) => t.kind === kind);
-        const im = new THREE.InstancedMesh(geo, treeMat, spots.length);
-        const m4 = new THREE.Matrix4();
         const q = new THREE.Quaternion();
         const up = new THREE.Vector3(0, 1, 0);
         const greens = TREE_GREENS[kind];
-        spots.forEach((t, i) => {
+        const entries = spots.map((t) => {
             q.setFromAxisAngle(up, rng() * Math.PI * 2);
-            m4.compose(new THREE.Vector3(t.x, t.h - 0.15, t.z), q, new THREE.Vector3(t.s, t.s * (0.9 + rng() * 0.25), t.s));
-            im.setMatrixAt(i, m4);
-            im.setColorAt(i, new THREE.Color(greens[Math.floor(rng() * greens.length)]));
+            const m4 = new THREE.Matrix4().compose(new THREE.Vector3(t.x, t.h - 0.15, t.z), q, new THREE.Vector3(t.s, t.s * (0.9 + rng() * 0.25), t.s));
+            return { x: t.x, z: t.z, m4, color: new THREE.Color(greens[Math.floor(rng() * greens.length)]) };
         });
-        im.castShadow = true;
-        im.receiveShadow = true;
-        scene.add(im);
+        addInstanced(geo, treeMat, entries, { lowGeo: [pineLow, oakLow, birchLow][kind] });
     });
 
     // rocks: lumpy stones with moss on top
@@ -1924,17 +2078,13 @@ export function createWorld(scene, models, opts = {}) {
         }
         const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
         variants.forEach((geo, v) => {
-            const im = new THREE.InstancedMesh(geo, rockMat, spots[v].length);
-            const m4 = new THREE.Matrix4();
             const e = new THREE.Euler();
-            spots[v].forEach((r, i) => {
+            const entries = spots[v].map((r) => {
                 e.set((rng() - 0.5) * 0.4, rng() * 6, (rng() - 0.5) * 0.4);
-                m4.compose(new THREE.Vector3(r.x, r.h + r.s * 0.2, r.z), new THREE.Quaternion().setFromEuler(e), new THREE.Vector3(r.s, r.s, r.s));
-                im.setMatrixAt(i, m4);
+                const m4 = new THREE.Matrix4().compose(new THREE.Vector3(r.x, r.h + r.s * 0.2, r.z), new THREE.Quaternion().setFromEuler(e), new THREE.Vector3(r.s, r.s, r.s));
+                return { x: r.x, z: r.z, m4 };
             });
-            im.castShadow = true;
-            im.receiveShadow = true;
-            scene.add(im);
+            addInstanced(geo, rockMat, entries);
         });
     }
 
@@ -1953,18 +2103,13 @@ export function createWorld(scene, models, opts = {}) {
             spots.push({ x, z, h, s });
             addCylinder(x, z, s * 1.15, h - 0.2, h + s * 1.4, { foliage: true });
         }
-        const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true }), spots.length);
-        const m4 = new THREE.Matrix4();
         const q = new THREE.Quaternion();
-        spots.forEach((b, i) => {
+        const entries = spots.map((b) => {
             q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rng() * 6);
-            m4.compose(new THREE.Vector3(b.x, b.h + b.s * 0.55, b.z), q, new THREE.Vector3(b.s * 1.15, b.s, b.s * 1.15));
-            im.setMatrixAt(i, m4);
-            im.setColorAt(i, new THREE.Color().setHSL(0.26 + rng() * 0.07, 0.5, 0.33 + rng() * 0.08));
+            const m4 = new THREE.Matrix4().compose(new THREE.Vector3(b.x, b.h + b.s * 0.55, b.z), q, new THREE.Vector3(b.s * 1.15, b.s, b.s * 1.15));
+            return { x: b.x, z: b.z, m4, color: new THREE.Color().setHSL(0.26 + rng() * 0.07, 0.5, 0.33 + rng() * 0.08) };
         });
-        im.castShadow = true;
-        im.receiveShadow = true;
-        scene.add(im);
+        addInstanced(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true }), entries);
     }
 
     // flowers: stems + coloured heads, in meadows
@@ -1984,17 +2129,10 @@ export function createWorld(scene, models, opts = {}) {
         }
         const stemGeo = new THREE.CylinderGeometry(0.02, 0.025, 0.5, 4).translate(0, 0.25, 0);
         const headGeo = new THREE.IcosahedronGeometry(0.11, 0).translate(0, 0.52, 0);
-        const stemIm = new THREE.InstancedMesh(stemGeo, new THREE.MeshLambertMaterial({ color: 0x3f8f3a }), stems.length);
-        const headIm = new THREE.InstancedMesh(headGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x222222 }), stems.length);
         const FLOWER = [0xffffff, 0xffe04a, 0xff7eb6, 0xb18cff, 0xff5a4a, 0x7ec8ff];
-        const m4 = new THREE.Matrix4();
-        stems.forEach((f, i) => {
-            m4.makeScale(f.s, f.s, f.s).setPosition(f.x, f.h, f.z);
-            stemIm.setMatrixAt(i, m4);
-            headIm.setMatrixAt(i, m4);
-            headIm.setColorAt(i, new THREE.Color(FLOWER[Math.floor(rng() * FLOWER.length)]));
-        });
-        scene.add(stemIm, headIm);
+        const entries = stems.map((f) => ({ x: f.x, z: f.z, m4: new THREE.Matrix4().makeScale(f.s, f.s, f.s).setPosition(f.x, f.h, f.z), color: new THREE.Color(FLOWER[Math.floor(rng() * FLOWER.length)]) }));
+        addInstanced(stemGeo, new THREE.MeshLambertMaterial({ color: 0x3f8f3a }), entries.map((e) => ({ x: e.x, z: e.z, m4: e.m4 })), { shadow: false, detail: true });
+        addInstanced(headGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x222222 }), entries, { shadow: false, detail: true });
     }
 
     // ---- grass tufts: only near you (they follow you around)
@@ -2384,6 +2522,15 @@ export function createWorld(scene, models, opts = {}) {
         setGrass(on) {
             if (grass) grass.visible = on;
         },
+        // the flowers (tiny, many) can be left out on slow computers
+        setDetail(on) {
+            detailMeshes.forEach((m) => { m.visible = on; });
+        },
+        // how far the detailed trees reach (the rest use the simple shape)
+        setLodDistance(d) {
+            lodNear = d;
+        },
+        updateLod,
         update(t) {
             water.position.y = Math.sin(t * 0.6) * 0.06;
             waterTex.offset.set(t * 0.004, t * 0.0025);

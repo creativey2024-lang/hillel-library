@@ -31,8 +31,14 @@ export function createFx(scene, camera) {
         scene.add(l);
         lights.push({ l, t: 1 });
     }
+    // fewer real lights on slow computers (each light costs on every pixel)
+    function setFlashLights(n) {
+        lights.forEach((s, i) => { s.l.visible = i < n; });
+    }
     function flashLight(pos, color, power = 30, range = 14) {
-        const slot = lights.reduce((a, b) => (a.t > b.t ? a : b));
+        const on = lights.filter((s) => s.l.visible);
+        if (!on.length) return;
+        const slot = on.reduce((a, b) => (a.t > b.t ? a : b));
         slot.l.position.copy(pos);
         slot.l.color.setHex(color);
         slot.l.distance = range;
@@ -206,5 +212,5 @@ export function createFx(scene, camera) {
         }
     }
 
-    return { explosion, shockwave, lightning, frost, splat, poof, sparkle, orb, trail, removeObj, glow, update, number, updateNumbers, flashLight };
+    return { explosion, shockwave, lightning, frost, splat, poof, sparkle, orb, trail, removeObj, glow, update, number, updateNumbers, flashLight, setFlashLights };
 }

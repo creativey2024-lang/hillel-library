@@ -330,6 +330,18 @@ html, body {
 .lb-round:hover, .lb-party:hover { background: rgba(40, 52, 120, 0.85); transform: translateY(-1px); }
 .lb-party.has-news { box-shadow: 0 0 0 2px var(--lb-accent); }
 
+/* the graphics setting (lobby + pause menu) */
+.gfx-btn {
+    display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px; border-radius: 999px; cursor: pointer;
+    font: 600 13px Rubik, system-ui, sans-serif; transition: background 0.2s, transform 0.2s;
+}
+.gfx-btn b { font-weight: 800; }
+.gfx-btn.lb-gfx { border: 1px solid var(--lb-line); background: var(--lb-glass); color: var(--lb-text); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.gfx-btn.lb-gfx:hover { background: rgba(40, 52, 120, 0.85); transform: translateY(-1px); }
+.panel .gfx-btn { margin-top: 14px; border: 1px solid #cbd5e1; background: #f1f5f9; color: #334155; }
+.panel .gfx-btn:hover { background: #e2e8f0; }
+@media (max-width: 560px) { .gfx-btn.lb-gfx span { font-size: 0; } .gfx-btn.lb-gfx span b { font-size: 12px; } }
+
 /* the party drawer (slides in from the right) */
 .lb-drawer {
     position: absolute; top: 64px; right: 18px; width: 300px; max-height: calc(100% - 170px); overflow: auto;
