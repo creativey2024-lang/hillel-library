@@ -10,6 +10,7 @@ const { attachUser } = require('./src/middleware/auth');
 const store = require('./src/services/store');
 const credentials = require('./src/services/credentialsStore');
 const { loadSeed } = require('./src/services/db');
+const recovery = require('./src/services/recovery');
 
 const createAuthRouter = require('./src/routes/auth');
 const createStaffRouter = require('./src/routes/staff');
@@ -62,6 +63,20 @@ async function main() {
   // --- Configure Firestore for staff/records (optional). Falls back to local JSON automatically if unreachable. ---
   store.configureCloud(FIREBASE_CONFIG);
   await store.retryCloudIfConfigured().catch(() => {});
+
+  // --- Locked out? Set RECOVER_ACCESS=1 in the server settings and restart (see README). ---
+  if (recovery.isOn(process.env.RECOVER_ACCESS)) {
+    await recovery
+      .recoverAccess({
+        store,
+        credentials,
+        seedStaff: seed.staff,
+        superAdminUsername: SUPER_ADMIN_USERNAME,
+        defaultPassword: DEFAULT_STAFF_PASSWORD,
+        secretPassword: SUPER_ADMIN_SECRET_PASSWORD,
+      })
+      .catch((err) => console.error('[recovery] failed:', err));
+  }
 
   const app = createApp();
 
